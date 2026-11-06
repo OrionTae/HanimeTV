@@ -97,9 +97,9 @@ that session:
 5. Delete `cookie.txt`. The session now lives in the browser profile.
 
 The cookies are only as good as the session they carry: when it expires,
-repeat step 1. A session imported from a browser on the same network keeps
-working after you switch a VPN back on, but a VPN exit that Cloudflare has
-flagged will get you blocked at the next challenge.
+repeat step 1. Turning a VPN back on afterwards should not invalidate the
+session (Turnstile only guards the login), but if downloads start failing after
+a network change, re-import before assuming something broke.
 
 Downloads stream to `<name>.part` and resume on rerun, so an interrupted
 transfer is not lost. hanime.tv hands out pixeldrain share pages; the tool
@@ -165,6 +165,13 @@ All inherit from `HTV.HanimeTVError`.
   assembling segments is left to tools like `yt-dlp` if you want it.
 - **Downloads need an account**, because that is the site's own rule.
 - One `BrowserSession` per thread at a time (Playwright's sync API).
+
+## How it works
+
+The reverse-engineered details — which hosts are signed, the CSRF pair, the
+handshake token envelope (and why the player and the download panel return it
+in different places), and the pixeldrain page/API split — are written up in
+[docs/PROTOCOL.md](docs/PROTOCOL.md) so they don't have to be rediscovered.
 
 ## Tests
 

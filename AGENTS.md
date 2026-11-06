@@ -53,6 +53,7 @@ Runtime dependency: `requests`. Optional extra `browser` pulls `playwright`
 | `tests/test_cli.py` | Offline parser/formatting tests. |
 | `tests/test_live.py` | Metadata tests against the real site. |
 | `tests/test_browser.py` | Opt-in Chromium tests (`HTV_BROWSER_TESTS=1`). |
+| `docs/PROTOCOL.md` | The reverse-engineered v11 protocol: signed hosts, CSRF, token envelope, handshake response shapes, pixeldrain. Read it before touching the JS. |
 
 ## Architecture
 
