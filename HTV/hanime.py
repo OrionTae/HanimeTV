@@ -691,6 +691,7 @@ class HanimeTV:
             info.get("name") or info["slug"],
             out_dir,
             quality=quality,
+            premium=result.get("is_premium_user", False),
             resume=resume,
             progress=progress,
         )

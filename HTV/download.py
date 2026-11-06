@@ -74,6 +74,18 @@ def _resolution(link: Dict[str, Any]) -> int:
     return int(match.group(1)) if match else 0
 
 
+def _quality_number(quality: Any) -> Optional[int]:
+    if quality in (None, ""):
+        return None
+    match = _RESOLUTION.search(str(quality))
+    return int(match.group(1)) if match else None
+
+
+def _stderr_warning(message: str) -> None:
+    sys.stderr.write("note: %s\n" % message)
+    sys.stderr.flush()
+
+
 def pick_link(
     links: List[Dict[str, Any]], quality: Optional[str] = None
 ) -> Optional[Dict[str, Any]]:
@@ -215,13 +227,33 @@ def download_links(
     out_dir: os.PathLike = ".",
     *,
     quality: Optional[str] = None,
+    premium: bool = False,
     resume: bool = True,
     progress: bool = True,
+    warn: Optional[Any] = _stderr_warning,
 ) -> Path:
-    """Pick the requested quality from ``links`` and download it."""
+    """Pick the requested quality from ``links`` and download it.
+
+    When the requested resolution is not among the links, the closest one is
+    used and ``warn`` is called with an explanation (``None`` silences it).
+    """
     link = pick_link(links, quality)
     if link is None:
         raise DownloadError("no downloadable links were returned")
-    chosen = _resolution(link) or quality or ""
+
+    available = [res for res in (_resolution(item) for item in links) if res]
+    chosen_res = _resolution(link)
+    wanted = _quality_number(quality)
+    if warn and wanted and chosen_res and wanted != chosen_res:
+        top = max(available) if available else chosen_res
+        if wanted > top and not premium:
+            warn(
+                "%dp is not available on a free account (the highest offered here "
+                "is %dp); using %dp" % (wanted, top, chosen_res)
+            )
+        else:
+            warn("%dp is not offered for this video; using %dp" % (wanted, chosen_res))
+
+    chosen = chosen_res or quality or ""
     target = Path(out_dir) / filename_for(name, chosen, link["url"])
     return download_file(link["url"], target, resume=resume, progress=progress)

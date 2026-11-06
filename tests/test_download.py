@@ -194,6 +194,44 @@ def test_direct_url_rewrites_pixeldrain_pages():
     assert direct_url("https://example.com/a.mp4") == "https://example.com/a.mp4"
 
 
+def test_download_links_warns_when_quality_is_premium_only(server, tmp_path):
+    notes = []
+    links = [
+        {"url": server.base + "/a_720p.mp4", "quality": "720p"},
+        {"url": server.base + "/a_480p.mp4", "quality": "480p"},
+    ]
+    path = download_links(
+        links, "Thing", tmp_path, quality="1080", premium=False,
+        progress=False, warn=notes.append,
+    )
+    assert path.name == "Thing [720p].mp4"
+    assert notes == [
+        "1080p is not available on a free account (the highest offered here is 720p); using 720p"
+    ]
+
+
+def test_download_links_warns_when_quality_absent_but_premium(server, tmp_path):
+    notes = []
+    links = [{"url": server.base + "/a_720p.mp4", "quality": "720p"}]
+    download_links(
+        links, "Thing", tmp_path, quality="1080", premium=True,
+        progress=False, warn=notes.append,
+    )
+    assert notes == ["1080p is not offered for this video; using 720p"]
+
+
+def test_download_links_silent_when_quality_matches(server, tmp_path):
+    notes = []
+    links = [{"url": server.base + "/a_720p.mp4", "quality": "720p"}]
+    download_links(links, "Thing", tmp_path, quality="720", progress=False, warn=notes.append)
+    assert notes == []
+
+
+def test_download_links_can_be_silenced(server, tmp_path):
+    links = [{"url": server.base + "/a_720p.mp4", "quality": "720p"}]
+    download_links(links, "Thing", tmp_path, quality="1080", progress=False, warn=None)
+
+
 def test_download_links_without_links():
     with pytest.raises(DownloadError):
         download_links([], "x", ".", progress=False)
