@@ -306,6 +306,57 @@ def test_storyboards_missing_raises_not_found(offline, monkeypatch):
         offline.storyboards("example-video")
 
 
+# ------------------------------------------------------------- cookie import
+
+
+def test_parse_cookie_header_basic():
+    from HTV.browser import parse_cookie_header
+
+    cookies = parse_cookie_header("session=abc; other=1")
+    assert [c["name"] for c in cookies] == ["session", "other"]
+    assert cookies[0]["value"] == "abc"
+    assert cookies[0]["domain"] == ".hanime.tv"
+    assert cookies[0]["secure"] is True
+    assert cookies[0]["httpOnly"] is True
+    assert cookies[0]["expires"] > 0
+
+
+def test_parse_cookie_header_cleans_wrapping():
+    from HTV.browser import parse_cookie_header
+
+    cookies = parse_cookie_header('  Cookie: "a=1; b=2"  ')
+    assert [c["name"] for c in cookies] == ["a", "b"]
+
+
+def test_parse_cookie_header_keeps_equals_in_value():
+    from HTV.browser import parse_cookie_header
+
+    cookies = parse_cookie_header("token=abc==; x=1")
+    assert cookies[0]["value"] == "abc=="
+
+
+def test_parse_cookie_header_dedupes_and_skips_junk():
+    from HTV.browser import parse_cookie_header
+
+    cookies = parse_cookie_header("a=1; ; junk; A=2; b")
+    assert [c["name"] for c in cookies] == ["a"]
+
+
+@pytest.mark.parametrize("header", ["", "   ", "Cookie:", None])
+def test_parse_cookie_header_empty(header):
+    from HTV.browser import parse_cookie_header
+
+    assert parse_cookie_header(header) == []
+
+
+def test_import_cookies_rejects_empty_header():
+    from HTV.browser import BrowserSession
+    from HTV.exceptions import HanimeTVError
+
+    with pytest.raises(HanimeTVError):
+        BrowserSession().import_cookies("   ")
+
+
 # ------------------------------------------------------------------- browser
 
 

@@ -185,6 +185,15 @@ def test_download_links_end_to_end(server, tmp_path):
     assert server.requests[0][0] == "/a_720p.mp4"
 
 
+def test_direct_url_rewrites_pixeldrain_pages():
+    from HTV.download import direct_url
+
+    assert direct_url("https://pixeldrain.com/u/abc123") == "https://pixeldrain.com/api/file/abc123?download"
+    assert direct_url("https://pixeldrain.net/u/abc123/") == "https://pixeldrain.com/api/file/abc123?download"
+    assert direct_url("https://pixeldrain.com/api/file/abc123") == "https://pixeldrain.com/api/file/abc123"
+    assert direct_url("https://example.com/a.mp4") == "https://example.com/a.mp4"
+
+
 def test_download_links_without_links():
     with pytest.raises(DownloadError):
         download_links([], "x", ".", progress=False)

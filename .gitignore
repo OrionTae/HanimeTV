@@ -126,3 +126,8 @@ pytest-cache-files-*
 
 tests/.tmp/
 
+
+# never commit a copied session
+cookie*.txt
+cookies*.txt
+

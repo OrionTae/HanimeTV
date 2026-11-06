@@ -9,10 +9,11 @@ to rediscover and easy to break.
 `HTV` is a Python client and CLI for [hanime.tv](https://hanime.tv), an adult
 anime streaming site.
 
-- **Version:** 2.1.0 (`HTV/hanime.py`, `pyproject.toml` — keep both in sync).
+- **Version:** 2.2.0 (`HTV/hanime.py`, `pyproject.toml` — keep both in sync).
 - **Status:** working against the live site as of 2026-11.
 - **Scope:** catalog search, per-video metadata, storyboards, playable HLS URLs,
-  and MP4 downloads for a signed-in account.
+  and MP4 downloads for a signed-in account. Sessions come either from a login
+  window or from cookies imported out of the browser the user really uses.
 - **Audience:** the library talks to a site with adult content; that is expected,
   not a bug. Do not add content filtering, moralising messages, or age gates to
   library code — the README already states the 18+ nature.
@@ -20,7 +21,7 @@ anime streaming site.
 ## Commands
 
 ```sh
-python -m pytest                      # 91 tests: offline + live (+4 skipped browser)
+python -m pytest                      # 101 tests: 97 run + 4 opt-in browser
 python -m pytest tests/test_unit.py   # offline, no sockets
 python -m pytest tests/test_download.py tests/test_cli.py   # offline
 HTV_BROWSER_TESTS=1 python -m pytest tests/test_browser.py  # launches Chromium
@@ -30,6 +31,7 @@ python -m HTV search "demo" -n 5    # CLI
 python -m HTV info example-video
 python -m HTV streams example-video
 python -m HTV login                   # browser window
+python -m HTV login --cookies-file cookie.txt   # adopt a real-browser session
 python -m HTV download example-video -q 720 -o videos
 ```
 
@@ -66,10 +68,13 @@ A. PUBLIC METADATA  (requests, no account)
         -> info() / storyboards()
 
 B. STREAMS + DOWNLOAD LINKS  (Playwright, signed by the site's WASM)
+   session   = login window OR imported cookies (login --cookies-file)
    page https://hanime.tv/videos/hentai/<slug>
         -> window.ssignature / window.stime exist
-        -> in-page: build AES token, POST https://auth.hanime.tv/api/v11/handshake
-        -> x-token header -> decrypt -> {"sources": [...]} or {"download_links": [...]}
+        -> refresh CSRF (ct.hanime.tv), build AES token
+        -> POST https://auth.hanime.tv/api/v11/handshake
+        -> player: x-token header  |  downloads: {"token": ...} in the body
+        -> decrypt -> {"sources": [...]} or {"download_links": [...]}
 
 C. FILE TRANSFER  (requests)
    download_links[i].url -> download_file() -> resume via .part -> final MP4
@@ -97,7 +102,18 @@ Facts that drive this design — verify before "simplifying" it:
 5. **Sources are HLS, downloads are MP4.** `sources[]` entries have
    `src`, `type`, `label`, `height`, `width`, `kind`; `kind: "promotion"` is a
    teaser with an empty `src`, `kind: "normal"` is real. `download_links[]`
-   entries are file-host URLs (pixeldrain et al.).
+   entries have `label`/`height`/`width` and a **pixeldrain share page**
+   (`/u/<id>`), not a file. `download.direct_url()` rewrites it to
+   `https://pixeldrain.com/api/file/<id>?download`, which is the actual MP4.
+6. **CSRF must be re-minted per handshake.** `x-csrf-token` has to match the
+   `htv_csrf_proof` cookie; a token cached from page load (or one baked into an
+   imported session) fails with `CSRF_ERROR_4`. `_HANDSHAKE_JS` always fetches a
+   fresh pair from `ct.hanime.tv` first.
+7. **The client's login flag lies.** `window.S.session.user` comes from
+   `localStorage.storeS`, which an imported cookie does not populate — so
+   `is_logged_in()` can be `False` while the server happily accepts the session.
+   Never gate a server call on it; attempt the call and translate a 401/403 (or
+   an empty link list) into `LoginRequired`.
 
 ## Public API contract
 
@@ -112,7 +128,8 @@ introduce dataclasses there — `json.dumps(client.search(...))` must keep worki
 | `info(url)` | Always fetches the watch page, so unknown-but-valid slugs still work. |
 | `storyboards(url, image=False)` | Adds `image` bytes + `content_type`. |
 | `streams(url, *, headless=True)` | Browser path; rewrites `src` to an absolute `url`. |
-| `login(email=None, password=None, *, headless=False, wait_seconds=300)` | Returns the user object; profile persists. |
+| `login(email=None, password=None, *, headless=False, wait_seconds=300)` | Returns the user object; profile persists. Usually blocked by Turnstile. |
+| `login_cookies(header, *, headless=True)` | Adopts a session copied from a real browser; the reliable path. |
 | `download(url, *, out_dir=".", quality=None, headless=False, resume=True, progress=True)` | Returns `Path`. |
 | `tags()`, `brands()`, `HanimeTV.slug(value)` | As before. |
 

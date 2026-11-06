@@ -40,7 +40,7 @@ from .exceptions import (
 
 __all__ = ["HanimeTV"]
 
-__version__ = "2.1.0"
+__version__ = "2.2.0"
 
 BASE_URL = "https://hanime.tv"
 GUEST_API_URL = "https://guest.freeanimehentai.net"
@@ -605,6 +605,47 @@ class HanimeTV:
             if session.is_logged_in():
                 return session.user() or {}
             return session.login(email, password, wait_seconds=wait_seconds)
+
+    def login_cookies(
+        self,
+        cookie_header: str,
+        *,
+        headless: bool = True,
+        profile_dir: Optional[str] = None,
+        domain: str = ".hanime.tv",
+    ) -> Dict[str, Any]:
+        """Adopt a session copied from a browser you signed into by hand.
+
+        Cloudflare's Turnstile often refuses the automated browser outright
+        (``code 600010``), but a session created in a normal browser works
+        fine. Log in at hanime.tv in that browser, open DevTools -> Network ->
+        any hanime.tv request -> Request Headers -> copy the ``cookie:`` value,
+        and pass it here.
+
+        Args:
+            cookie_header: The raw ``Cookie`` header (``name=value; ...``).
+            headless: Run without a window (the default; no challenge is shown).
+            profile_dir: Browser profile to store the session in.
+            domain: Cookie domain; the default covers all hanime.tv hosts.
+
+        Returns:
+            The signed-in user object.
+
+        Raises:
+            LoginRequired: The cookies did not produce a signed-in session.
+        """
+        from .browser import BrowserSession
+
+        with BrowserSession(profile_dir=profile_dir, headless=headless) as session:
+            session.import_cookies(cookie_header, domain=domain)
+            user = session.user()
+            if not user:
+                raise LoginRequired(
+                    "those cookies did not produce a signed-in session. Copy the "
+                    "whole `cookie:` header from a request made *while signed in* "
+                    "on hanime.tv, and make sure the session has not expired."
+                )
+            return user
 
     def download(
         self,

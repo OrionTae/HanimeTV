@@ -24,7 +24,7 @@ from typing import Any, Dict, List, Optional
 
 from .exceptions import BrowserUnavailable, HanimeTVError, LoginRequired
 
-__all__ = ["BrowserSession", "DEFAULT_PROFILE_DIR"]
+__all__ = ["BrowserSession", "DEFAULT_PROFILE_DIR", "parse_cookie_header"]
 
 DEFAULT_PROFILE_DIR = os.path.join(os.path.expanduser("~"), ".htv", "browser")
 
@@ -53,12 +53,13 @@ async ({slug, directive, videoId}) => {
   const key = await crypto.subtle.importKey('raw', keyBytes, {name: 'AES-GCM'}, false, ['encrypt', 'decrypt']);
   const aad = enc.encode('htv-insecure-v1');
 
-  if (!window.S?.csrf_token) {
-    try {
-      const c = await (await fetch('https://ct.hanime.tv/csrf-token', {credentials: 'include'})).json();
-      if (window.S && c?.csrf_token) window.S.csrf_token = c.csrf_token;
-    } catch (e) { /* the request below will surface a CSRF error */ }
-  }
+  // Always mint a fresh CSRF token: it must match the htv_csrf_proof cookie,
+  // and an imported session may carry a stale pair.
+  try {
+    const c = await (await fetch('https://ct.hanime.tv/csrf-token',
+      {credentials: 'include', cache: 'no-store'})).json();
+    if (window.S && c?.csrf_token) window.S.csrf_token = c.csrf_token;
+  } catch (e) { /* keep the page's token if the refresh fails */ }
 
   const payload = {timestamp_unix: Math.floor(Date.now() / 1000), directive, slug};
   if (videoId) payload.hentai_video_id = Number(videoId);
@@ -87,8 +88,18 @@ async ({slug, directive, videoId}) => {
   if (!response.ok) {
     return {ok: false, status: response.status, error: (await response.text()).slice(0, 400)};
   }
-  const xt = response.headers.get('x-token');
-  if (!xt) return {ok: false, status: response.status, error: 'missing x-token header'};
+  // The player returns the payload in the x-token header; get_download_links
+  // returns it as {"token": ...} in the JSON body. Accept either.
+  let xt = response.headers.get('x-token');
+  if (!xt) {
+    let payload = null;
+    try { payload = await response.json(); } catch (e) { /* not JSON */ }
+    if (payload && typeof payload.token === 'string') xt = payload.token;
+    else {
+      return {ok: false, status: response.status,
+              error: 'no token in response; body=' + JSON.stringify(payload).slice(0, 300)};
+    }
+  }
 
   const env = JSON.parse(dec.decode(unb64u(xt)));
   const plain = await crypto.subtle.decrypt(
@@ -100,29 +111,96 @@ async ({slug, directive, videoId}) => {
 
 _SESSION_JS = """() => (window.S && window.S.session) || null"""
 
+# Surfaces the site's own Cloudflare/Turnstile failure text, which is far more
+# useful than waiting out the timeout (it usually says "disable VPN/adblock").
+_LOGIN_MESSAGE_JS = r"""
+() => {
+  const nodes = Array.from(document.querySelectorAll('p, div, span, li'))
+    .filter(n => n.children.length === 0);
+  for (const node of nodes) {
+    const text = (node.textContent || '').trim();
+    if (text.length < 8 || text.length > 300) continue;
+    if (/security check failed|disable ad blockers|disable.*vpn|verification failed/i.test(text)) {
+      return text;
+    }
+  }
+  return '';
+}
+"""
+
+
+def parse_cookie_header(
+    header: str, *, domain: str = ".hanime.tv", ttl_days: int = 7
+) -> List[Dict[str, Any]]:
+    """Turn a browser's ``Cookie:`` header into Playwright cookie dicts.
+
+    Copy the value from DevTools (Network -> a hanime.tv request -> Request
+    Headers -> cookie) after signing in normally. Accepts an optional leading
+    ``cookie:`` label and surrounding quotes.
+    """
+    text = (header or "").strip()
+    if not text:
+        return []
+    if text.lower().startswith("cookie:"):
+        text = text.split(":", 1)[1]
+    text = text.strip().strip('"').strip("'")
+
+    expires = int(time.time()) + max(1, int(ttl_days)) * 86400
+    cookies: List[Dict[str, Any]] = []
+    seen = set()
+    for part in text.split(";"):
+        if "=" not in part:
+            continue
+        name, value = part.split("=", 1)
+        name = name.strip()
+        value = value.strip()
+        if not name or name.lower() in seen:
+            continue
+        seen.add(name.lower())
+        cookies.append(
+            {
+                "name": name,
+                "value": value,
+                "domain": domain,
+                "path": "/",
+                "expires": expires,
+                "secure": True,
+                "httpOnly": True,
+                "sameSite": "Lax",
+            }
+        )
+    return cookies
+
 
 class BrowserSession:
-    """A persistent Chromium profile that can talk to the signed endpoints.
+    """A persistent Chromium profile that talks to the signed endpoints.
 
-    Use as a context manager::
+    Use it as a context manager::
 
         with BrowserSession() as session:
             if not session.is_logged_in():
-                session.login()
+                session.import_cookies(cookie_header)
             links = session.download_links("some-slug", video_id=3600)
-    """
 
+    Signing in through the window only works until Cloudflare's Turnstile
+    decides the automated browser looks suspicious (it usually does, with
+    code 600010). Importing cookies from a browser you logged into by hand
+    avoids that entirely.
+    """
     def __init__(
         self,
         *,
         profile_dir: Optional[str] = None,
         headless: bool = False,
         timeout: float = 90.0,
-        user_agent: str = USER_AGENT,
+        user_agent: Optional[str] = None,
     ) -> None:
         self.profile_dir = profile_dir or DEFAULT_PROFILE_DIR
         self.headless = headless
         self.timeout = float(timeout)
+        # None keeps Chromium's native UA. Forcing a Firefox UA here makes the
+        # UA disagree with the sec-ch-ua client hints, which Cloudflare treats
+        # as automation.
         self.user_agent = user_agent
         self._playwright = None
         self._context = None
@@ -160,12 +238,15 @@ class BrowserSession:
             ) from exc
         try:
             os.makedirs(self.profile_dir, exist_ok=True)
+            options: Dict[str, Any] = {
+                "headless": self.headless,
+                "viewport": {"width": 1280, "height": 800},
+                "accept_downloads": False,
+            }
+            if self.user_agent:
+                options["user_agent"] = self.user_agent
             self._context = self._playwright.chromium.launch_persistent_context(
-                self.profile_dir,
-                headless=self.headless,
-                user_agent=self.user_agent,
-                viewport={"width": 1280, "height": 800},
-                accept_downloads=False,
+                self.profile_dir, **options
             )
         except Exception as exc:
             self._stop_playwright()
@@ -286,11 +367,23 @@ class BrowserSession:
         while time.time() < deadline:
             try:
                 state = self.page.evaluate(_SESSION_JS) or {}
-            except Exception:
-                state = {}
+                problem = self.page.evaluate(_LOGIN_MESSAGE_JS) or ""
+            except Exception as exc:
+                raise LoginRequired(
+                    "the browser window was closed before the sign-in finished. "
+                    "Run `login` again and leave that window open - it closes "
+                    "itself as soon as the session is detected."
+                ) from exc
             if state.get("user"):
                 return state["user"]
-            self.page.wait_for_timeout(1000)
+            if problem:
+                raise LoginRequired(
+                    "hanime.tv rejected the sign-in: %r. Cloudflare flags VPN and "
+                    "proxy exit IPs here - disable the VPN for the login (or add "
+                    "the browser to Proton VPN's split-tunnel exclusions), then "
+                    "retry `login`." % problem
+                )
+            time.sleep(1.0)
 
         raise LoginRequired(
             "no signed-in session appeared within %d seconds. Run again with the "
@@ -304,6 +397,30 @@ class BrowserSession:
         import shutil
 
         shutil.rmtree(self.profile_dir, ignore_errors=True)
+
+    def import_cookies(
+        self, cookie_header: str, *, domain: str = ".hanime.tv", ttl_days: int = 7
+    ) -> int:
+        """Load a session copied from a browser you signed into yourself.
+
+        Returns the number of cookies installed. Raises :class:`HanimeTVError`
+        when the header contains nothing usable.
+        """
+        cookies = parse_cookie_header(cookie_header, domain=domain, ttl_days=ttl_days)
+        if not cookies:
+            raise HanimeTVError("no cookies found in the supplied header")
+        self.open()
+        self._context.add_cookies(cookies)
+        self.page.goto(
+            "https://hanime.tv/", wait_until="domcontentloaded", timeout=self.timeout * 1000
+        )
+        try:
+            self.page.wait_for_function(
+                "() => Boolean(window.S)", timeout=self.timeout * 1000
+            )
+        except Exception:
+            pass
+        return len(cookies)
 
     # ------------------------------------------------------------- handshake
 
@@ -344,12 +461,24 @@ class BrowserSession:
         return [s for s in data.get("sources") or [] if s.get("src")]
 
     def download_links(self, slug: str, video_id: Optional[int] = None) -> Dict[str, Any]:
-        """Ask for MP4 download links. Requires a signed-in session."""
-        if not self.is_logged_in():
-            raise LoginRequired(
-                "downloading requires a hanime.tv account. Run `python -m HTV login` "
-                "(or `HanimeTV().login()`), finish the sign-in in the browser, then retry."
-            )
-        data = self.handshake(slug, "get_download_links", video_id=video_id)
+        """Ask for MP4 download links. Requires a valid session (cookie or login)."""
+        try:
+            data = self.handshake(slug, "get_download_links", video_id=video_id)
+        except HanimeTVError as exc:
+            text = str(exc)
+            if any(marker in text for marker in ("401", "403", "Unauthorized", "login")):
+                raise LoginRequired(
+                    "hanime.tv refused the download links: the session is missing or "
+                    "expired. Sign in with `login`, or re-import cookies with "
+                    "`login --cookies-file`."
+                ) from exc
+            raise
+
         links = [link for link in data.get("download_links") or [] if link.get("url")]
+        if not links:
+            raise LoginRequired(
+                "hanime.tv returned no download links for this video. That usually "
+                "means the session is not signed in, or the account is not allowed "
+                "to download it."
+            )
         return {"links": links, "is_premium_user": bool(data.get("is_premium_user"))}

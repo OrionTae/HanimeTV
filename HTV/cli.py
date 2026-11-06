@@ -40,6 +40,23 @@ def _table(rows: List[Sequence[str]], headers: Sequence[str]) -> None:
 
 
 def cmd_login(args: argparse.Namespace) -> int:
+    if args.cookies or args.cookies_file:
+        header = args.cookies or ""
+        if args.cookies_file:
+            from pathlib import Path
+
+            try:
+                header = Path(args.cookies_file).read_text(encoding="utf-8")
+            except OSError as exc:
+                print("error: cannot read %s: %s" % (args.cookies_file, exc), file=sys.stderr)
+                return 2
+        if not header.strip():
+            print("error: empty cookie header", file=sys.stderr)
+            return 2
+        user = _client(args).login_cookies(header, profile_dir=args.profile)
+        print("signed in as %s" % (user.get("name") or user.get("email") or "unknown user"))
+        return 0
+
     password = args.password
     if args.email and password is None:
         password = getpass.getpass("hanime.tv password for %s: " % args.email)
@@ -49,6 +66,7 @@ def cmd_login(args: argparse.Namespace) -> int:
         password=password,
         headless=args.headless,
         profile_dir=args.profile,
+        wait_seconds=args.wait,
     )
     print("signed in as %s" % (user.get("name") or user.get("email") or "unknown user"))
     return 0
@@ -163,6 +181,13 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--email", default=None)
     p.add_argument("--password", default=None, help="prefer the interactive prompt")
     p.add_argument("--headless", action="store_true", help="hide the window (not for first login)")
+    p.add_argument("--wait", type=float, default=300.0, help="seconds to wait for the sign-in")
+    p.add_argument(
+        "--cookies-file",
+        default=None,
+        help="adopt a session: file containing the `cookie:` header copied from your browser",
+    )
+    p.add_argument("--cookies", default=None, help="same as --cookies-file, inline")
     p.set_defaults(func=cmd_login)
 
     p = sub.add_parser("logout", help="delete the stored browser profile")

@@ -21,6 +21,7 @@ from .exceptions import DownloadError
 __all__ = [
     "download_file",
     "download_links",
+    "direct_url",
     "pick_link",
     "safe_name",
     "filename_for",
@@ -30,11 +31,21 @@ CHUNK_SIZE = 1 << 20
 _ILLEGAL = re.compile(r'[<>:"/\\|?*\x00-\x1f]')
 _EXTENSION = re.compile(r"\.(mp4|mkv|webm|avi|mov)$", re.IGNORECASE)
 _RESOLUTION = re.compile(r"(\d{3,4})")
+# hanime hands out pixeldrain *pages*; the bytes live behind the file API.
+_PIXELDRAIN_PAGE = re.compile(r"^https?://(?:www\.)?pixeldrain\.(?:com|net)/u/([A-Za-z0-9_-]+)/?$")
 
 USER_AGENT = (
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:130.0) "
     "Gecko/20100101 Firefox/130.0"
 )
+
+
+def direct_url(url: str) -> str:
+    """Turn a share page into a direct file URL (pixeldrain ``/u/x`` -> API)."""
+    match = _PIXELDRAIN_PAGE.match(str(url).strip())
+    if match:
+        return "https://pixeldrain.com/api/file/%s?download" % match.group(1)
+    return url
 
 
 def safe_name(text: str, fallback: str = "video", limit: int = 120) -> str:
@@ -139,6 +150,7 @@ def download_file(
     session: Optional[requests.Session] = None,
 ) -> Path:
     """Download ``url`` to ``destination``, resuming a ``.part`` file when possible."""
+    url = direct_url(url)
     dest = Path(destination)
     dest.parent.mkdir(parents=True, exist_ok=True)
     if dest.exists() and dest.stat().st_size > 0:

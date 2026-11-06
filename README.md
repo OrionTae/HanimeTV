@@ -42,6 +42,7 @@ print(board["url"], board["columns"], board["rows"], len(board["image"]))
 
 ```sh
 python -m HTV login                       # opens a browser; sign in once
+python -m HTV login --cookies-file cookie.txt   # or adopt a browser session
 python -m HTV search "demo" -n 10
 python -m HTV info example-video
 python -m HTV streams example-video    # HLS URLs, no account needed
@@ -62,8 +63,8 @@ produce: a Cloudflare Turnstile challenge on login, and an `x-signature` /
 that signature is out of scope for this project.
 
 So `login()` drives a real Chromium page instead: the site signs its own
-requests, you complete the security check, and the resulting session is stored
-in a persistent profile (`~/.htv/browser` by default). After that:
+requests, you complete the security check, and the session is stored in a
+persistent profile (`~/.htv/browser` by default).
 
 ```python
 hentai = HanimeTV()
@@ -72,12 +73,42 @@ path = hentai.download("example-video", quality="720", out_dir="videos")
 print(path)                                       # videos/Example Video [720p].mp4
 ```
 
+### If Cloudflare refuses the login window
+
+Turnstile frequently scores an automated browser as a bot and answers
+`code 600010` — that is not a bug you can fix from code, and this project does
+not try to evade it. Sign in with a browser you already use, then lend the tool
+that session:
+
+1. Sign in at <https://hanime.tv> in your normal browser.
+2. DevTools → **Network** → reload → click the `hanime.tv` document request →
+   **Headers** → Request Headers → copy the value of `cookie:`.
+3. Save it to `cookie.txt`.
+4. Import it:
+
+   ```sh
+   python -m HTV login --cookies-file cookie.txt
+   ```
+
+   ```python
+   hentai.login_cookies(open("cookie.txt").read())
+   ```
+
+5. Delete `cookie.txt`. The session now lives in the browser profile.
+
+The cookies are only as good as the session they carry: when it expires,
+repeat step 1. A session imported from a browser on the same network keeps
+working after you switch a VPN back on, but a VPN exit that Cloudflare has
+flagged will get you blocked at the next challenge.
+
 Downloads stream to `<name>.part` and resume on rerun, so an interrupted
-transfer is not lost. The MP4 links themselves are ordinary file-host URLs.
+transfer is not lost. hanime.tv hands out pixeldrain share pages; the tool
+resolves them to the direct file API automatically.
 
 Notes:
 
 - `login(headless=True)` works only once the profile exists.
+- Free accounts get 720p/480p/360p; 1080p is premium-only.
 - The browser profile is a credential: treat `~/.htv/browser` like a password.
 - `logout()` (or `python -m HTV logout`) deletes it.
 
@@ -92,6 +123,7 @@ Notes:
 | `storyboards(url, image=False)` | `{"url", "columns", "rows", "tile_count"}` |
 | `streams(url)` | playable HLS sources (no account) |
 | `login(email=None, password=None, *, headless=False)` | user object; stores the browser profile |
+| `login_cookies(header, *, headless=True)` | adopt a session copied from your own browser |
 | `download(url, *, out_dir=".", quality=None, headless=False)` | `Path` of the downloaded MP4 |
 | `tags()`, `brands()` | sorted `list[str]` |
 | `HanimeTV.slug(value)` | normalise URL / dict / slug |
@@ -137,7 +169,7 @@ All inherit from `HTV.HanimeTVError`.
 ## Tests
 
 ```sh
-python -m pytest                      # 91 tests
+python -m pytest                      # 101 tests
 python -m pytest tests/test_unit.py   # offline
 HTV_BROWSER_TESTS=1 python -m pytest tests/test_browser.py   # launches Chromium
 ```
