@@ -9,7 +9,7 @@ to rediscover and easy to break.
 `HTV` is a Python client and CLI for [hanime.tv](https://hanime.tv), an adult
 anime streaming site.
 
-- **Version:** 2.3.1 (`HTV/hanime.py`, `pyproject.toml` — keep both in sync).
+- **Version:** 2.3.2 (`HTV/hanime.py`, `pyproject.toml` — keep both in sync).
 - **Status:** working against the live site as of 2026-11.
 - **Scope:** catalog search, per-video metadata, storyboards, playable HLS URLs,
   and MP4 downloads. Downloads need no account up to 720p; a session (login
@@ -105,9 +105,12 @@ Facts that drive this design — verify before "simplifying" it:
 5. **Sources are HLS, downloads are MP4.** `sources[]` entries have
    `src`, `type`, `label`, `height`, `width`, `kind`; `kind: "promotion"` is a
    teaser with an empty `src`, `kind: "normal"` is real. `download_links[]`
-   entries have `label`/`height`/`width` and a **pixeldrain share page**
-   (`/u/<id>`), not a file. `download.direct_url()` rewrites it to
-   `https://pixeldrain.com/api/file/<id>?download`, which is the actual MP4.
+   entries have `label`/`height`/`width` and a **pixeldrain share page**, not a
+   file. Two shapes, two endpoints — `/u/<id>` → `/api/file/<id>`,
+   `/d/<id>` → `/api/filesystem/<id>`; mixing them gives `not_found`.
+   `download.direct_url()` does the mapping, and `download_file()` refuses
+   `text/*` / `application/json` responses so a page can never be saved as an
+   `.mp4` again.
 6. **CSRF must be re-minted per handshake.** `x-csrf-token` has to match the
    `htv_csrf_proof` cookie; a token cached from page load (or one baked into an
    imported session) fails with `CSRF_ERROR_4`. `_HANDSHAKE_JS` always fetches a

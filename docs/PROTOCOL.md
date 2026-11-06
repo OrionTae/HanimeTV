@@ -222,17 +222,23 @@ download_links: [{label: "720p", height: 720, width: 854,
                   url: "https://pixeldrain.com/u/pJWxrHUz"}, ...]
 ```
 
-The URL is a **share page**, not a file:
+The URL is a **share page**, not a file, and there are two page shapes that map
+to different endpoints:
 
-| URL | Returns |
-| --- | --- |
-| `https://pixeldrain.com/u/<id>` | `text/html` — the viewer page |
-| `https://pixeldrain.net/u/<id>` | `text/html` — same site |
-| `https://pixeldrain.com/api/file/<id>` | `video/mp4`, ~174 MB, supports Range |
+| Page URL | Returns | Direct file URL |
+| --- | --- | --- |
+| `https://pixeldrain.com/u/<id>` | `text/html` — file viewer | `https://pixeldrain.com/api/file/<id>` |
+| `https://pixeldrain.com/d/<id>` | `text/html` — shared-download page | `https://pixeldrain.com/api/filesystem/<id>` |
 
-So `download.direct_url()` rewrites `/u/<id>` to `/api/file/<id>?download`.
-Downloading the share page would silently save an HTML file with an `.mp4`
-extension.
+The two ID spaces are **not** interchangeable: `/api/file/<a /d/ id>` answers
+`404 {"value":"not_found"}`, and `/api/filesystem/<a /u/ id>` does the same.
+The HTML page for a `/d/` link does advertise the right URL in its
+`og:video` meta tag, which is how the mapping was confirmed.
+
+Both direct endpoints stream `video/mp4` and honour `Range`. Downloading the
+share page instead would silently save an HTML file with an `.mp4` extension,
+so `download_file()` also rejects any response whose content type is
+`text/*` or `application/json`.
 
 Free accounts are offered 720p / 480p / 360p; 1080p is premium-only
 (`is_premium_user: false`).

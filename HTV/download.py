@@ -31,8 +31,13 @@ CHUNK_SIZE = 1 << 20
 _ILLEGAL = re.compile(r'[<>:"/\\|?*\x00-\x1f]')
 _EXTENSION = re.compile(r"\.(mp4|mkv|webm|avi|mov)$", re.IGNORECASE)
 _RESOLUTION = re.compile(r"(\d{3,4})")
-# hanime hands out pixeldrain *pages*; the bytes live behind the file API.
-_PIXELDRAIN_PAGE = re.compile(r"^https?://(?:www\.)?pixeldrain\.(?:com|net)/u/([A-Za-z0-9_-]+)/?$")
+# hanime hands out pixeldrain *pages*; the bytes live behind the file API, and
+# the two page shapes use different endpoints:
+#   /u/<id>  ->  /api/file/<id>        (file viewer)
+#   /d/<id>  ->  /api/filesystem/<id>  (shared-download page)
+_PIXELDRAIN_PAGE = re.compile(
+    r"^https?://(?:www\.)?pixeldrain\.(?:com|net)/(u|d)/([A-Za-z0-9_-]+)/?(?:\?.*)?$"
+)
 
 USER_AGENT = (
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:130.0) "
@@ -41,10 +46,12 @@ USER_AGENT = (
 
 
 def direct_url(url: str) -> str:
-    """Turn a share page into a direct file URL (pixeldrain ``/u/x`` -> API)."""
+    """Turn a pixeldrain share page into a direct file URL."""
     match = _PIXELDRAIN_PAGE.match(str(url).strip())
     if match:
-        return "https://pixeldrain.com/api/file/%s?download" % match.group(1)
+        kind, file_id = match.groups()
+        endpoint = "filesystem" if kind == "d" else "file"
+        return "https://pixeldrain.com/api/%s/%s" % (endpoint, file_id)
     return url
 
 
@@ -195,6 +202,15 @@ def download_file(
             )
 
         length = int(response.headers.get("content-length") or 0)
+        content_type = (response.headers.get("content-type") or "").lower()
+        if content_type.startswith(("text/", "application/json")):
+            preview = next(response.iter_content(160), b"")[:160]
+            raise DownloadError(
+                "expected a video but %s served %s instead (%r). The link probably "
+                "needs resolving; please report the video slug." % (
+                    url, content_type, preview[:80]
+                )
+            )
         total = have + length if length else 0
         meter = _Progress(total, dest.name, progress)
 

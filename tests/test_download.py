@@ -37,6 +37,14 @@ class _Server:
                 if self.path.startswith("/missing"):
                     self.send_error(404)
                     return
+                if self.path.startswith("/page"):
+                    body = b"<html><body>not a video</body></html>"
+                    self.send_response(200)
+                    self.send_header("Content-Type", "text/html; charset=utf-8")
+                    self.send_header("Content-Length", str(len(body)))
+                    self.end_headers()
+                    self.wfile.write(body)
+                    return
                 data = outer.payload
                 start = 0
                 range_header = self.headers.get("Range")
@@ -188,10 +196,20 @@ def test_download_links_end_to_end(server, tmp_path):
 def test_direct_url_rewrites_pixeldrain_pages():
     from HTV.download import direct_url
 
-    assert direct_url("https://pixeldrain.com/u/abc123") == "https://pixeldrain.com/api/file/abc123?download"
-    assert direct_url("https://pixeldrain.net/u/abc123/") == "https://pixeldrain.com/api/file/abc123?download"
+    assert direct_url("https://pixeldrain.com/u/abc123") == "https://pixeldrain.com/api/file/abc123"
+    assert direct_url("https://pixeldrain.net/u/abc123/") == "https://pixeldrain.com/api/file/abc123"
+    assert direct_url("https://pixeldrain.com/d/abc123") == "https://pixeldrain.com/api/filesystem/abc123"
+    assert direct_url("https://pixeldrain.com/d/abc123?foo=1") == "https://pixeldrain.com/api/filesystem/abc123"
     assert direct_url("https://pixeldrain.com/api/file/abc123") == "https://pixeldrain.com/api/file/abc123"
     assert direct_url("https://example.com/a.mp4") == "https://example.com/a.mp4"
+
+
+def test_download_refuses_html_instead_of_video(server, tmp_path):
+    target = tmp_path / "x.mp4"
+    with pytest.raises(DownloadError, match="web page|html"):
+        download_file(server.base + "/page", target, progress=False)
+    assert not target.exists()
+    assert not (tmp_path / "x.mp4.part").exists()
 
 
 def test_download_links_warns_when_quality_is_premium_only(server, tmp_path):

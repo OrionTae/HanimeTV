@@ -40,7 +40,7 @@ from .exceptions import (
 
 __all__ = ["HanimeTV"]
 
-__version__ = "2.3.1"
+__version__ = "2.3.2"
 
 BASE_URL = "https://hanime.tv"
 GUEST_API_URL = "https://guest.freeanimehentai.net"
