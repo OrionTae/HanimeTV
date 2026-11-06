@@ -112,3 +112,11 @@ dmypy.json
 
 # Pyre type checker
 .pyre/
+
+# pytest
+.pytest_cache/
+pytest-cache-files-*
+
+# local sandbox ACL recovery reports
+.acl-recovery/
+
