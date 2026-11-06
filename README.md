@@ -109,6 +109,14 @@ when input is piped it falls back to numbered prompts, so it can be scripted:
 printf '1\ndemo\n1\n3\n7\n' | python -m HTV
 ```
 
+Downloads run headless, so no browser window flashes up. If something fails,
+the menu prints the error and keeps running; the full traceback goes to
+`~/.htv/error.log`. To watch the browser during a download for debugging:
+
+```sh
+python -m HTV ui --visible
+```
+
 ## Login (optional)
 
 Free-tier downloads need no account — hanime.tv's UI hides its download button
@@ -234,7 +242,7 @@ in different places), and the pixeldrain page/API split — are written up in
 ## Tests
 
 ```sh
-python -m pytest                      # 119 tests
+python -m pytest                      # 121 tests
 python -m pytest tests/test_unit.py   # offline
 HTV_BROWSER_TESTS=1 python -m pytest tests/test_browser.py   # launches Chromium
 ```

@@ -166,15 +166,37 @@ def _pause() -> None:
         raise KeyboardInterrupt
 
 
+def _log_error(exc: BaseException) -> Optional[Path]:
+    """Write a traceback next to the browser profile and return its path."""
+    import traceback
+
+    try:
+        log = Path.home() / ".htv" / "error.log"
+        log.parent.mkdir(parents=True, exist_ok=True)
+        log.write_text(
+            "".join(traceback.format_exception(type(exc), exc, exc.__traceback__)),
+            encoding="utf-8",
+        )
+        return log
+    except Exception:  # pragma: no cover - best effort only
+        return None
+
+
 # ----------------------------------------------------------------------- app
 
 
 class App:
     """Menu loop. Kept as a class so tests can drive it without a terminal."""
 
-    def __init__(self, client: Optional[HanimeTV] = None, out_dir: str = "downloads") -> None:
+    def __init__(
+        self,
+        client: Optional[HanimeTV] = None,
+        out_dir: str = "downloads",
+        headless: bool = True,
+    ) -> None:
         self.client = client or HanimeTV()
         self.out_dir = out_dir
+        self.headless = headless
 
     # -- helpers ---------------------------------------------------------
 
@@ -282,7 +304,12 @@ class App:
         quality = None if choice == 0 else QUALITY_CHOICES[choice].rstrip("p")
         print("\n  fetching links and downloading to %s ...\n" % Path(self.out_dir).resolve())
         try:
-            path = self.client.download(slug, out_dir=self.out_dir, quality=quality)
+            path = self.client.download(
+                slug,
+                out_dir=self.out_dir,
+                quality=quality,
+                headless=self.headless,
+            )
         except HanimeTVError as exc:
             print("\n  %s" % exc)
             _pause()
@@ -349,11 +376,17 @@ class App:
             except HanimeTVError as exc:
                 print("\n  %s" % exc)
                 _pause()
+            except Exception as exc:  # never let the menu die on a stray error
+                log = _log_error(exc)
+                print("\n  something went wrong: %s: %s" % (type(exc).__name__, exc))
+                if log:
+                    print("  full details: %s" % log)
+                _pause()
 
 
-def run(out_dir: str = "downloads") -> int:
+def run(out_dir: str = "downloads", headless: bool = True) -> int:
     """Entry point for the interactive menu."""
-    app = App(out_dir=out_dir)
+    app = App(out_dir=out_dir, headless=headless)
     try:
         return app.run()
     except KeyboardInterrupt:

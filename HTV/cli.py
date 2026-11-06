@@ -167,7 +167,7 @@ def cmd_storyboards(args: argparse.Namespace) -> int:
 def cmd_ui(args: argparse.Namespace) -> int:
     from .tui import run
 
-    return run(out_dir=args.out)
+    return run(out_dir=args.out, headless=not args.visible)
 
 
 # ------------------------------------------------------------------ parser
@@ -185,6 +185,11 @@ def build_parser() -> argparse.ArgumentParser:
 
     p = sub.add_parser("ui", help="interactive menu with arrow keys (default)")
     p.add_argument("-o", "--out", default="downloads", help="download directory")
+    p.add_argument(
+        "--visible",
+        action="store_true",
+        help="show the browser window during downloads (debugging)",
+    )
     p.set_defaults(func=cmd_ui)
 
     p = sub.add_parser("login", help="sign in through a browser window")

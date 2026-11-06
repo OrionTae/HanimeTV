@@ -40,7 +40,7 @@ from .exceptions import (
 
 __all__ = ["HanimeTV"]
 
-__version__ = "2.3.0"
+__version__ = "2.3.1"
 
 BASE_URL = "https://hanime.tv"
 GUEST_API_URL = "https://guest.freeanimehentai.net"
@@ -653,7 +653,7 @@ class HanimeTV:
         *,
         out_dir: Union[str, "os.PathLike[str]"] = "downloads",
         quality: Optional[str] = None,
-        headless: bool = False,
+        headless: bool = True,
         profile_dir: Optional[str] = None,
         resume: bool = True,
         progress: bool = True,
@@ -669,8 +669,8 @@ class HanimeTV:
             out_dir: Destination directory (created if missing).
             quality: Preferred resolution, e.g. ``"1080"`` or ``"720"``. The
                 closest available link is used when it is absent.
-            headless: Run the browser without a window. The stored profile is
-                already signed in, so this normally works.
+            headless: Run the browser without a window (the default; the
+                handshake needs no interaction). Pass ``False`` to watch it.
             profile_dir: Browser profile to reuse.
             resume: Continue a partial ``.part`` file.
             progress: Show a progress line on stderr.

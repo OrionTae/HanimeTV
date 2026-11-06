@@ -43,6 +43,7 @@ def test_parser_ui_defaults():
     args = cli.build_parser().parse_args(["ui"])
     assert args.command == "ui"
     assert args.out == "downloads"
+    assert args.visible is False
 
 
 def test_parser_allows_no_command_for_the_menu():

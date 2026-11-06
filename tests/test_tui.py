@@ -95,6 +95,35 @@ def test_download_passes_quality_through(tmp_path, monkeypatch):
     assert calls["slug"] == "example-video"
     assert calls["quality"] == "1080"
     assert calls["out_dir"] == str(tmp_path)
+    assert calls["headless"] is True
+
+
+def test_download_can_show_the_browser(tmp_path, monkeypatch):
+    calls = {}
+
+    class FakeClient:
+        def download(self, slug, **kwargs):
+            calls.update(kwargs)
+            return Path(tmp_path) / "x.mp4"
+
+    monkeypatch.setattr("builtins.input", lambda prompt="": "1")
+    monkeypatch.setattr("HTV.tui._pause", lambda: None)
+    App(client=FakeClient(), out_dir=str(tmp_path), headless=False).download("x", "X")
+    assert calls["headless"] is False
+
+
+def test_errors_do_not_crash_the_menu(monkeypatch, tmp_path, capsys):
+    class Broken:
+        def search(self, *args, **kwargs):
+            raise RuntimeError("boom")
+
+    answers = iter(["1", "x", "7"])
+    monkeypatch.setattr("builtins.input", lambda prompt="": next(answers))
+    monkeypatch.setattr("HTV.tui._pause", lambda: None)
+    monkeypatch.setattr("HTV.tui._log_error", lambda exc: None)
+
+    assert App(client=Broken(), out_dir=str(tmp_path)).run() == 0
+    assert "boom" in capsys.readouterr().out
 
 
 def test_best_quality_passes_none(tmp_path, monkeypatch):
