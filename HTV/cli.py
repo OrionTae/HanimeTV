@@ -164,6 +164,12 @@ def cmd_storyboards(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_ui(args: argparse.Namespace) -> int:
+    from .tui import run
+
+    return run(out_dir=args.out)
+
+
 # ------------------------------------------------------------------ parser
 
 
@@ -175,7 +181,11 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--timeout", type=float, default=30.0, help="HTTP timeout (metadata)")
     parser.add_argument("--profile", default=None, help="browser profile directory")
 
-    sub = parser.add_subparsers(dest="command", required=True)
+    sub = parser.add_subparsers(dest="command")
+
+    p = sub.add_parser("ui", help="interactive menu with arrow keys (default)")
+    p.add_argument("-o", "--out", default="downloads", help="download directory")
+    p.set_defaults(func=cmd_ui)
 
     p = sub.add_parser("login", help="sign in through a browser window")
     p.add_argument("--email", default=None)
@@ -217,9 +227,9 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--json", action="store_true")
     p.set_defaults(func=cmd_streams)
 
-    p = sub.add_parser("download", help="download an MP4 (needs `login` first)")
+    p = sub.add_parser("download", help="download an MP4 (no account needed)")
     p.add_argument("video", help="slug or URL")
-    p.add_argument("-o", "--out", default=".", help="output directory")
+    p.add_argument("-o", "--out", default="downloads", help="output directory (default: downloads/)")
     p.add_argument("-q", "--quality", default=None, help="1080, 720, 480, 360")
     p.add_argument("--visible", action="store_true", help="show the browser window")
     p.set_defaults(func=cmd_download)
@@ -234,6 +244,10 @@ def build_parser() -> argparse.ArgumentParser:
 
 def main(argv: Optional[Sequence[str]] = None) -> int:
     args = build_parser().parse_args(argv)
+    if not getattr(args, "command", None):
+        from .tui import run
+
+        return run()
     try:
         return args.func(args)
     except HanimeTVError as exc:

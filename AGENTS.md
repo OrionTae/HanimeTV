@@ -9,7 +9,7 @@ to rediscover and easy to break.
 `HTV` is a Python client and CLI for [hanime.tv](https://hanime.tv), an adult
 anime streaming site.
 
-- **Version:** 2.2.1 (`HTV/hanime.py`, `pyproject.toml` — keep both in sync).
+- **Version:** 2.3.0 (`HTV/hanime.py`, `pyproject.toml` — keep both in sync).
 - **Status:** working against the live site as of 2026-11.
 - **Scope:** catalog search, per-video metadata, storyboards, playable HLS URLs,
   and MP4 downloads. Downloads need no account up to 720p; a session (login
@@ -21,18 +21,19 @@ anime streaming site.
 ## Commands
 
 ```sh
-python -m pytest                      # 101 tests: 97 run + 4 opt-in browser
+python -m pytest                      # 119 tests: 115 run + 4 opt-in browser
 python -m pytest tests/test_unit.py   # offline, no sockets
 python -m pytest tests/test_download.py tests/test_cli.py   # offline
 HTV_BROWSER_TESTS=1 python -m pytest tests/test_browser.py  # launches Chromium
 python example.py
 
+python -m HTV                         # interactive menu (no subcommand)
 python -m HTV search "demo" -n 5    # CLI
 python -m HTV info example-video
 python -m HTV streams example-video
 python -m HTV login                   # browser window
 python -m HTV login --cookies-file cookie.txt   # adopt a real-browser session
-python -m HTV download example-video -q 720 -o videos
+python -m HTV download example-video -q 720   # -> downloads/
 ```
 
 Runtime dependency: `requests`. Optional extra `browser` pulls `playwright`
@@ -46,6 +47,7 @@ Runtime dependency: `requests`. Optional extra `browser` pulls `playwright`
 | `HTV/browser.py` | `BrowserSession`: Playwright profile, sign-in, and the in-page handshake that yields stream/download data. |
 | `HTV/download.py` | Streaming file downloader: resume, progress, link selection, filename sanitising. |
 | `HTV/cli.py`, `HTV/__main__.py` | `python -m HTV` / `htv` commands. |
+| `HTV/tui.py` | Interactive menu (`python -m HTV`): arrow keys on a TTY, numbered prompts when piped. |
 | `HTV/exceptions.py` | Exception hierarchy, rooted at `HanimeTVError`. |
 | `tests/conftest.py` | Session fixtures **and** a `tmp_path` override (see Tests). |
 | `tests/test_unit.py` | Offline client tests with a synthetic catalog. |
@@ -136,7 +138,7 @@ introduce dataclasses there — `json.dumps(client.search(...))` must keep worki
 | `streams(url, *, headless=True)` | Browser path; rewrites `src` to an absolute `url`. |
 | `login(email=None, password=None, *, headless=False, wait_seconds=300)` | Returns the user object; profile persists. Usually blocked by Turnstile. |
 | `login_cookies(header, *, headless=True)` | Adopts a session copied from a real browser; the reliable path. |
-| `download(url, *, out_dir=".", quality=None, headless=False, resume=True, progress=True)` | Returns `Path`. |
+| `download(url, *, out_dir="downloads", quality=None, headless=False, resume=True, progress=True)` | Returns `Path`; default folder is `downloads/` next to the CWD. |
 | `tags()`, `brands()`, `HanimeTV.slug(value)` | As before. |
 
 `order` keywords live in `ORDERINGS`; `relevance` uses `_match()` tiers — exact

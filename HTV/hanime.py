@@ -40,7 +40,7 @@ from .exceptions import (
 
 __all__ = ["HanimeTV"]
 
-__version__ = "2.2.1"
+__version__ = "2.3.0"
 
 BASE_URL = "https://hanime.tv"
 GUEST_API_URL = "https://guest.freeanimehentai.net"
@@ -651,7 +651,7 @@ class HanimeTV:
         self,
         url: Union[str, Dict[str, Any]],
         *,
-        out_dir: Union[str, "os.PathLike[str]"] = ".",
+        out_dir: Union[str, "os.PathLike[str]"] = "downloads",
         quality: Optional[str] = None,
         headless: bool = False,
         profile_dir: Optional[str] = None,

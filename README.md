@@ -28,6 +28,12 @@ python -m HTV info example-video
 python -m HTV storyboards example-video
 ```
 
+Or open the interactive menu, which wraps everything below in arrow-key choices:
+
+```sh
+python -m HTV          # or just: htv
+```
+
 Downloads need the `browser` extra and **no account** — despite what the site's
 UI suggests, free-tier links (up to 720p) are served to anonymous callers:
 
@@ -35,6 +41,8 @@ UI suggests, free-tier links (up to 720p) are served to anonymous callers:
 pip install ".[browser]" && playwright install chromium
 python -m HTV download example-video -q 720
 ```
+
+Files land in `./downloads` by default (`-o` to change it).
 
 An account only matters for 1080p and other premium content. If you have a
 premium plan, sign in once and the tool will pick up whatever your tier offers:
@@ -75,19 +83,31 @@ print(board["url"], board["columns"], board["rows"], len(board["image"]))
 ## Command line
 
 ```sh
-python -m HTV login                       # opens a browser; sign in once
-python -m HTV login --cookies-file cookie.txt   # or adopt a browser session
+python -m HTV                             # interactive menu (arrow keys)
 python -m HTV search "demo" -n 10
 python -m HTV info example-video
 python -m HTV streams example-video    # HLS URLs, no account needed
-python -m HTV download example-video -q 720 -o ~/Videos
+python -m HTV download example-video -q 720   # -> downloads/
 python -m HTV storyboards example-video --image board.jpg
+python -m HTV login                       # optional: browser window
+python -m HTV login --cookies-file cookie.txt   # or adopt a browser session
 python -m HTV whoami
 python -m HTV logout
 ```
 
 `pip install .` also provides the same commands as `htv`. `--json` is available
 on `search`, `info` and `streams` for scripting.
+
+### The menu
+
+`python -m HTV` with no subcommand starts a small interactive client: search,
+browse, browse by tag, download by slug, list downloaded files, and login.
+On a real terminal it takes **↑/↓ + Enter** (or the number keys, or `j`/`k`);
+when input is piped it falls back to numbered prompts, so it can be scripted:
+
+```sh
+printf '1\ndemo\n1\n3\n7\n' | python -m HTV
+```
 
 ## Login (optional)
 
@@ -214,7 +234,7 @@ in different places), and the pixeldrain page/API split — are written up in
 ## Tests
 
 ```sh
-python -m pytest                      # 101 tests
+python -m pytest                      # 119 tests
 python -m pytest tests/test_unit.py   # offline
 HTV_BROWSER_TESTS=1 python -m pytest tests/test_browser.py   # launches Chromium
 ```

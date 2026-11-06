@@ -34,14 +34,20 @@ def test_parser_search():
 
 def test_parser_download_defaults():
     args = cli.build_parser().parse_args(["download", "abc"])
-    assert args.out == "."
+    assert args.out == "downloads"
     assert args.quality is None
     assert args.visible is False
 
 
-def test_parser_requires_command():
-    with pytest.raises(SystemExit):
-        cli.build_parser().parse_args([])
+def test_parser_ui_defaults():
+    args = cli.build_parser().parse_args(["ui"])
+    assert args.command == "ui"
+    assert args.out == "downloads"
+
+
+def test_parser_allows_no_command_for_the_menu():
+    args = cli.build_parser().parse_args([])
+    assert args.command is None
 
 
 def test_search_table(monkeypatch, capsys):
