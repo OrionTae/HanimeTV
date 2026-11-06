@@ -4,14 +4,18 @@ from HTV import HanimeTV
 
 hentai = HanimeTV()
 
-# SEARCH
-print("== search ==")
-for video in hentai.search("Example Show", per_page=5):
+# BROWSE - an empty query lists the catalog, so no title has to be hardcoded
+print("== most viewed ==")
+videos = hentai.search("", order="views", per_page=5)
+for video in videos:
     print("  %-40s %s" % (video["name"], video["url"]))
 
-# GET INFO (URL, catalog dict or slug all work)
+if not videos:
+    raise SystemExit("catalog returned nothing - is the site reachable?")
+
+# GET INFO - accepts a URL, a catalog dict, or a slug
 print("\n== info ==")
-info = hentai.info("https://hanime.tv/videos/hentai/example-show-1")
+info = hentai.info(videos[0])
 print("  name   :", info["name"])
 print("  brand  :", info.get("brand"))
 print("  views  :", info.get("views"))
@@ -25,15 +29,8 @@ print("  sheet  :", storyboards["url"])
 print("  grid   : %sx%s (%s tiles)" % (
     storyboards["columns"], storyboards["rows"], storyboards["tile_count"]))
 
-# BROWSE
-print("\n== newest ==")
-for video in hentai.search("", order="newest", per_page=5):
-    print("  %-40s %s" % (video["name"], video.get("created_at")))
-
-# DOWNLOADS (needs a one-time browser sign-in)
-#   python -m HTV login
-#   python -m HTV download example-video -q 720 -o videos
+# DOWNLOADS - no account needed for up to 720p
+#   python -m HTV download <slug> -q 720
 # or from Python:
-#   hentai.login()                                     # opens a browser once
-#   hentai.download("example-video", quality="720")
-print("\nFor MP4 downloads: `python -m HTV login`, then `python -m HTV download <slug>`")
+#   hentai.download("<slug>", quality="720")
+print("\nFor MP4 downloads: `python -m HTV download <slug> -q 720`")

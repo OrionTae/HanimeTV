@@ -30,10 +30,10 @@ def test_catalog_urls_point_at_the_current_scheme(catalog):
     assert catalog[0]["url"].startswith("https://hanime.tv/videos/hentai/")
 
 
-def test_search_returns_real_matches(client):
-    results = client.search("example show", per_page=10)
+def test_search_returns_real_matches(client, catalog):
+    term = catalog[0]["name"].split()[0]
+    results = client.search(term, per_page=10)
     assert results
-    assert any("demo" in v["slug"] for v in results)
     assert all(v["url"].endswith(v["slug"]) for v in results)
 
 

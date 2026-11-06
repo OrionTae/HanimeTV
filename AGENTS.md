@@ -29,11 +29,11 @@ python example.py
 
 python -m HTV                         # interactive menu (no subcommand)
 python -m HTV search "demo" -n 5    # CLI
-python -m HTV info example-video
-python -m HTV streams example-video
+python -m HTV info <slug>
+python -m HTV streams <slug>
 python -m HTV login                   # browser window
 python -m HTV login --cookies-file cookie.txt   # adopt a real-browser session
-python -m HTV download example-video -q 720   # -> downloads/
+python -m HTV download <slug> -q 720   # -> downloads/
 ```
 
 Runtime dependency: `requests`. Optional extra `browser` pulls `playwright`
@@ -210,7 +210,7 @@ import json, urllib.request, requests
 r = requests.get("https://guest.freeanimehentai.net/api/v11/search_hvs", timeout=60)
 print(r.status_code, len(r.content), len(r.json().get("data", [])))
 # 2. Watch page still Astro islands?
-p = requests.get("https://hanime.tv/videos/hentai/example-video", timeout=60)
+p = requests.get("https://hanime.tv/videos/hentai/<slug>", timeout=60)
 print(p.status_code, "astro-island" in p.text, "storyboard_url" in p.text)
 # 3. Domain still points at the same CDN?
 q = "https://cloudflare-dns.com/dns-query?name=hanime.tv&type=A"

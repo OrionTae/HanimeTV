@@ -113,7 +113,7 @@ likely mistake when editing this code.
 Payload:
 
 ```json
-{"timestamp_unix": 1793983773, "directive": "htv_player_handshake", "slug": "example-video"}
+{"timestamp_unix": 1793983773, "directive": "htv_player_handshake", "slug": "<slug>"}
 {"timestamp_unix": 1793983773, "directive": "get_download_links", "slug": "...", "hentai_video_id": 3600}
 ```
 
@@ -256,15 +256,15 @@ Free accounts are offered 720p / 480p / 360p; 1080p is premium-only
 
 ```sh
 # catalog + watch page (no browser needed)
-python -m HTV info example-video
+python -m HTV info <slug>
 
 # streams (headless browser, anonymous)
-python -m HTV streams example-video
+python -m HTV streams <slug>
 
 # handshake + download links (needs a session)
 python -m pytest tests/test_browser.py -q          # HTV_BROWSER_TESTS=1
 python -m HTV login --cookies-file cookie.txt
-python -m HTV download example-video -q 720 -o downloads
+python -m HTV download <slug> -q 720 -o downloads
 ```
 
 If the handshake starts failing, re-check `window.AppConfig` in the page HTML

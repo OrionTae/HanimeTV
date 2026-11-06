@@ -12,9 +12,6 @@ import pytest
 
 from HTV import HanimeTV
 
-# A video that has been on the site for years and definitely has a storyboard.
-KNOWN_SLUG = "example-video"
-
 _TMP_BASE = Path(__file__).resolve().parent / ".tmp"
 
 
@@ -53,8 +50,5 @@ def catalog(client):
 
 @pytest.fixture(scope="session")
 def sample(client, catalog):
-    """A slug that exists right now, preferring a stable, well-known one."""
-    slugs = {video["slug"] for video in catalog}
-    if KNOWN_SLUG in slugs:
-        return KNOWN_SLUG
+    """A slug that exists right now - titles rotate, so never hardcode one."""
     return catalog[0]["slug"]

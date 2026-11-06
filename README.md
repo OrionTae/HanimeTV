@@ -3,7 +3,7 @@
 Python client and CLI for [hanime.tv](https://hanime.tv): catalog search, video
 metadata, storyboards, playable stream URLs, and MP4 downloads.
 
-> **v2.2** — the 2019 client is dead (`search.hanime.tv`, `members.hanime.tv` and
+> **v2** — the 2019 client is dead (`search.hanime.tv`, `members.hanime.tv` and
 > `mapi.htvanime.com` no longer exist). Metadata works anonymously; sessions come
 > from your own browser, because hanime.tv signs authenticated requests inside its
 > WebAssembly module and blocks scripted logins.
@@ -23,9 +23,9 @@ Python 3.8+.
 Metadata needs nothing but `requests`:
 
 ```sh
-python -m HTV search "demo" -n 5
-python -m HTV info example-video
-python -m HTV storyboards example-video
+python -m HTV search "" -n 5          # browse; prints slugs
+python -m HTV info <slug>             # paste one of those slugs
+python -m HTV storyboards <slug>
 ```
 
 Or open the interactive menu, which wraps everything below in arrow-key choices:
@@ -39,10 +39,13 @@ UI suggests, free-tier links (up to 720p) are served to anonymous callers:
 
 ```sh
 pip install ".[browser]" && playwright install chromium
-python -m HTV download example-video -q 720
+python -m HTV download <slug> -q 720
 ```
 
 Files land in `./downloads` by default (`-o` to change it).
+
+`<slug>` and `<name>` are placeholders: slugs come from `search`, and the
+name is the video title used for the file name.
 
 An account only matters for 1080p and other premium content. If you have a
 premium plan, sign in once and the tool will pick up whatever your tier offers:
@@ -67,12 +70,17 @@ from HTV import HanimeTV
 
 hentai = HanimeTV()
 
+# BROWSE - an empty query lists the catalog
+videos = hentai.search("", order="views", per_page=5)
+for video in videos:
+    print(video["name"], "->", video["url"])
+
 # SEARCH - matches titles, alternate titles and slugs
-for video in hentai.search("Example Show", per_page=5):
+for video in hentai.search("your query", per_page=5):
     print(video["name"], "->", video["url"])
 
 # GET INFO - URL, catalog dict or slug
-info = hentai.info("example-video")
+info = hentai.info(videos[0])
 print(info["name"], info["brand"], info["views"])
 
 # STORYBOARDS - sprite sheet metadata, optionally the JPEG itself
@@ -85,10 +93,10 @@ print(board["url"], board["columns"], board["rows"], len(board["image"]))
 ```sh
 python -m HTV                             # interactive menu (arrow keys)
 python -m HTV search "demo" -n 10
-python -m HTV info example-video
-python -m HTV streams example-video    # HLS URLs, no account needed
-python -m HTV download example-video -q 720   # -> downloads/
-python -m HTV storyboards example-video --image board.jpg
+python -m HTV info <slug>
+python -m HTV streams <slug>    # HLS URLs, no account needed
+python -m HTV download <slug> -q 720   # -> downloads/
+python -m HTV storyboards <slug> --image board.jpg
 python -m HTV login                       # optional: browser window
 python -m HTV login --cookies-file cookie.txt   # or adopt a browser session
 python -m HTV whoami
@@ -106,7 +114,7 @@ On a real terminal it takes **↑/↓ + Enter** (or the number keys, or `j`/`k`)
 when input is piped it falls back to numbered prompts, so it can be scripted:
 
 ```sh
-printf '1\ndemo\n1\n3\n7\n' | python -m HTV
+printf '2\n1\n1\n3\n7\n' | python -m HTV     # browse -> newest -> first -> back -> quit
 ```
 
 Downloads run headless, so no browser window flashes up. If something fails,
@@ -133,8 +141,8 @@ profile (`~/.htv/browser` by default).
 ```python
 hentai = HanimeTV()
 hentai.login()                                    # once, browser window
-path = hentai.download("example-video", quality="720", out_dir="videos")
-print(path)                                       # videos/Example Video [720p].mp4
+path = hentai.download("<slug>", quality="720", out_dir="videos")
+print(path)                                       # downloads/<name> [720p].mp4
 ```
 
 ### If Cloudflare refuses the login window
@@ -253,5 +261,7 @@ search, `info`, storyboards, and — when enabled — the browser handshake.
 
 ## Legal
 
-MIT licensed. Unofficial client; respect the site's terms and the law where you
-live. The service hosts adult content (18+).
+MIT licensed. Based on the original [HanimeTV](https://github.com/moepoi/HanimeTV)
+by Moe Poi (2019); v2 is a rewrite for the current site. Unofficial client;
+respect the site's terms and the law where you live. The service hosts adult
+content (18+).
