@@ -9,11 +9,11 @@ to rediscover and easy to break.
 `HTV` is a Python client and CLI for [hanime.tv](https://hanime.tv), an adult
 anime streaming site.
 
-- **Version:** 2.2.0 (`HTV/hanime.py`, `pyproject.toml` — keep both in sync).
+- **Version:** 2.2.1 (`HTV/hanime.py`, `pyproject.toml` — keep both in sync).
 - **Status:** working against the live site as of 2026-11.
 - **Scope:** catalog search, per-video metadata, storyboards, playable HLS URLs,
-  and MP4 downloads for a signed-in account. Sessions come either from a login
-  window or from cookies imported out of the browser the user really uses.
+  and MP4 downloads. Downloads need no account up to 720p; a session (login
+  window or imported cookies) only unlocks premium content such as 1080p.
 - **Audience:** the library talks to a site with adult content; that is expected,
   not a bug. Do not add content filtering, moralising messages, or age gates to
   library code — the README already states the 18+ nature.
@@ -115,6 +115,11 @@ Facts that drive this design — verify before "simplifying" it:
    `is_logged_in()` can be `False` while the server happily accepts the session.
    Never gate a server call on it; attempt the call and translate a 401/403 (or
    an empty link list) into `LoginRequired`.
+8. **Downloads do not require an account.** The site's UI hides the button
+   behind `isLoggedIn`, but the API returns free-tier links to anonymous
+   callers — verified with an empty profile: 3 links, `is_premium_user: false`.
+   Do not put a login pre-check back in `download_links()`; a session only
+   changes *which* qualities come back.
 
 ## Public API contract
 

@@ -467,7 +467,12 @@ class BrowserSession:
         return [s for s in data.get("sources") or [] if s.get("src")]
 
     def download_links(self, slug: str, video_id: Optional[int] = None) -> Dict[str, Any]:
-        """Ask for MP4 download links. Requires a valid session (cookie or login)."""
+        """Ask for MP4 download links.
+
+        No account required: the site's UI hides the button behind a login, but
+        the API serves free-tier links to anonymous callers. A session only
+        matters for account-restricted content (1080p / premium).
+        """
         try:
             data = self.handshake(slug, "get_download_links", video_id=video_id)
         except HanimeTVError as exc:
@@ -475,8 +480,9 @@ class BrowserSession:
             if any(marker in text for marker in ("401", "403", "Unauthorized", "login")):
                 raise LoginRequired(
                     "hanime.tv refused the download links: the session is missing or "
-                    "expired. Sign in with `login`, or re-import cookies with "
-                    "`login --cookies-file`."
+                    "expired. Free-tier links normally need no session at all, so this "
+                    "video is probably account-restricted. Sign in with `login`, or "
+                    "re-import cookies with `login --cookies-file`."
                 ) from exc
             raise
 
@@ -484,7 +490,6 @@ class BrowserSession:
         if not links:
             raise LoginRequired(
                 "hanime.tv returned no download links for this video. That usually "
-                "means the session is not signed in, or the account is not allowed "
-                "to download it."
+                "means it is premium-only, or a stale session is being used."
             )
         return {"links": links, "is_premium_user": bool(data.get("is_premium_user"))}

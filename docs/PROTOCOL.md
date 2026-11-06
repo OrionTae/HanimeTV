@@ -176,9 +176,16 @@ therefore report `is_logged_in() == False` while the server happily serves
 download links. Never gate a server call on it — attempt the call and map
 401/403 to "not signed in".
 
+Worth stating plainly, because the frontend says otherwise: **a session is not
+required to download.** `/login` shows "You need an account to … download MP4s"
+and hides the button behind `isLoggedIn`, but `get_download_links` answers
+anonymous callers just fine. Verified with an empty profile (no cookies,
+`session.user == null`): three links came back, `is_premium_user: false`.
+
 ## 8. Getting a session into the tool
 
-Two paths:
+Only needed for account-restricted content — free-tier downloads work
+anonymously. When you do need one, there are two paths:
 
 1. **Login window** — `login()`. Blocked by Turnstile in practice (§6).
 2. **Cookie import** — `login_cookies()` / `login --cookies-file`. Sign in with
@@ -206,6 +213,9 @@ change, re-import the cookies before assuming the tool is broken.
 the manifest URL; segments are ordinary HLS.
 
 ## 10. Download links
+
+No account required. A premium session only changes which qualities appear —
+the free tier tops out at 720p.
 
 ```
 download_links: [{label: "720p", height: 720, width: 854,

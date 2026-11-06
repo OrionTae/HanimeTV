@@ -28,28 +28,29 @@ python -m HTV info example-video
 python -m HTV storyboards example-video
 ```
 
-Downloads need a hanime.tv account and the `browser` extra. Getting the session
-is the only awkward step: Cloudflare's Turnstile usually refuses the automated
-login window (`600010`), so borrow a session from a browser you already use.
+Downloads need the `browser` extra and **no account** — despite what the site's
+UI suggests, free-tier links (up to 720p) are served to anonymous callers:
 
-1. **Register or sign in** at <https://hanime.tv> in your normal browser.
-   Registration goes through the same challenge, so do it there, not in the tool.
-2. **Copy the session cookie:** DevTools → Network → reload → the `hanime.tv`
-   document request → Headers → Request Headers → the `cookie:` value.
-3. **Import it:** `python -m HTV login --cookies-file cookie.txt`
-4. **Download:** `python -m HTV download example-video -q 720`
+```sh
+pip install ".[browser]" && playwright install chromium
+python -m HTV download example-video -q 720
+```
 
-`python -m HTV login` (a real Chromium window) still exists for when Turnstile
-cooperates, but treat it as best-effort — see
-[If Cloudflare refuses the login window](#if-cloudflare-refuses-the-login-window).
-Either way the session lands in `~/.htv/browser`, and later downloads need no
-browser window and no account prompt.
+An account only matters for 1080p and other premium content. If you have a
+premium plan, sign in once and the tool will pick up whatever your tier offers:
+
+```sh
+python -m HTV login                       # browser window (best-effort)
+# or, when Cloudflare refuses that window:
+python -m HTV login --cookies-file cookie.txt
+```
 
 | Step | Works with | Needs |
 | --- | --- | --- |
 | search / info / storyboards | ✅ | `requests` |
 | streams | ✅ | `browser` extra |
-| download | ✅ | `browser` extra + imported session |
+| download (up to 720p) | ✅ | `browser` extra |
+| download 1080p / premium | ✅ | `browser` extra + a session |
 
 ## Quick start
 
@@ -88,16 +89,18 @@ python -m HTV logout
 `pip install .` also provides the same commands as `htv`. `--json` is available
 on `search`, `info` and `streams` for scripting.
 
-## Login and downloads
+## Login (optional)
 
-hanime.tv protects `auth.hanime.tv` with two things a plain HTTP client cannot
-produce: a Cloudflare Turnstile challenge on login, and an `x-signature` /
-`x-time` header pair that only the site's WebAssembly module can mint. Forging
-that signature is out of scope for this project.
+Free-tier downloads need no account — hanime.tv's UI hides its download button
+behind a login, but the API hands the links to anonymous callers. A session is
+only useful for premium content (1080p) and account features.
 
-So `login()` drives a real Chromium page instead: the site signs its own
-requests, you complete the security check, and the session is stored in a
-persistent profile (`~/.htv/browser` by default).
+Getting one is the awkward part: `auth.hanime.tv` requires a Cloudflare
+Turnstile challenge plus an `x-signature` / `x-time` header pair that only the
+site's WebAssembly module can mint, and forging that signature is out of scope
+here. So `login()` drives a real Chromium page: the site signs its own requests,
+you complete the security check, and the session is stored in a persistent
+profile (`~/.htv/browser` by default).
 
 ```python
 hentai = HanimeTV()
@@ -197,7 +200,8 @@ All inherit from `HTV.HanimeTVError`.
 
 - **No HLS ripping.** `streams()` returns the manifest URLs the player uses;
   assembling segments is left to tools like `yt-dlp` if you want it.
-- **Downloads need an account**, because that is the site's own rule.
+- **Free tier stops at 720p.** 1080p needs a premium account; the tool picks
+  whatever the account offers.
 - One `BrowserSession` per thread at a time (Playwright's sync API).
 
 ## How it works

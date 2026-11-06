@@ -9,7 +9,6 @@ import pytest
 
 pytest.importorskip("playwright.sync_api")
 
-from HTV import LoginRequired  # noqa: E402
 from HTV.browser import BrowserSession  # noqa: E402
 
 pytestmark = [
@@ -49,8 +48,10 @@ def test_sources_returns_hls_streams(session):
     assert all(s.get("type") == "application/x-mpegURL" for s in sources)
 
 
-def test_download_links_requires_login(session):
-    """A guest profile must be refused with a clear, catchable error."""
+def test_download_links_work_without_an_account(session):
+    """The API serves free-tier links to anonymous callers, unlike the UI."""
     assert session.is_logged_in() is False
-    with pytest.raises(LoginRequired):
-        session.download_links(SLUG)
+    result = session.download_links(SLUG, video_id=3600)
+    assert result["links"], "expected anonymous download links"
+    assert all(link["url"].startswith("https://pixeldrain") for link in result["links"])
+    assert result["is_premium_user"] is False

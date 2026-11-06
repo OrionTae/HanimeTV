@@ -40,7 +40,7 @@ from .exceptions import (
 
 __all__ = ["HanimeTV"]
 
-__version__ = "2.2.0"
+__version__ = "2.2.1"
 
 BASE_URL = "https://hanime.tv"
 GUEST_API_URL = "https://guest.freeanimehentai.net"
@@ -658,7 +658,11 @@ class HanimeTV:
         resume: bool = True,
         progress: bool = True,
     ) -> "Path":
-        """Download one video as MP4, using the account stored by :meth:`login`.
+        """Download one video as MP4.
+
+        Works without an account: hanime.tv serves free-tier (up to 720p) links
+        to anonymous callers. A signed-in profile only matters for
+        account-restricted content, which is why ``profile_dir`` exists.
 
         Args:
             url: Video URL, catalog dict or slug.
@@ -675,7 +679,7 @@ class HanimeTV:
             Path of the downloaded file.
 
         Raises:
-            LoginRequired: No account in the browser profile.
+            LoginRequired: The video is account-restricted and the profile has no session.
             BrowserUnavailable: Playwright/Chromium is not installed.
             DownloadError: The transfer failed.
         """

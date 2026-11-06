@@ -131,3 +131,8 @@ tests/.tmp/
 cookie*.txt
 cookies*.txt
 
+
+# media pulled by the downloader
+*.mp4
+*.part
+
