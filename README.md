@@ -3,10 +3,10 @@
 Python client and CLI for [hanime.tv](https://hanime.tv): catalog search, video
 metadata, storyboards, playable stream URLs, and MP4 downloads.
 
-> **v2.1** — the 2019 client is dead (`search.hanime.tv`, `members.hanime.tv` and
-> `mapi.htvanime.com` no longer exist). Metadata works anonymously; login and
-> downloads go through a real browser, because hanime.tv signs those requests
-> inside its own WebAssembly module.
+> **v2.2** — the 2019 client is dead (`search.hanime.tv`, `members.hanime.tv` and
+> `mapi.htvanime.com` no longer exist). Metadata works anonymously; sessions come
+> from your own browser, because hanime.tv signs authenticated requests inside its
+> WebAssembly module and blocks scripted logins.
 
 ## Installation
 
@@ -17,6 +17,39 @@ playwright install chromium            # one-time browser download
 ```
 
 Python 3.8+.
+
+## First run
+
+Metadata needs nothing but `requests`:
+
+```sh
+python -m HTV search "demo" -n 5
+python -m HTV info example-video
+python -m HTV storyboards example-video
+```
+
+Downloads need a hanime.tv account and the `browser` extra. Getting the session
+is the only awkward step: Cloudflare's Turnstile usually refuses the automated
+login window (`600010`), so borrow a session from a browser you already use.
+
+1. **Register or sign in** at <https://hanime.tv> in your normal browser.
+   Registration goes through the same challenge, so do it there, not in the tool.
+2. **Copy the session cookie:** DevTools → Network → reload → the `hanime.tv`
+   document request → Headers → Request Headers → the `cookie:` value.
+3. **Import it:** `python -m HTV login --cookies-file cookie.txt`
+4. **Download:** `python -m HTV download example-video -q 720`
+
+`python -m HTV login` (a real Chromium window) still exists for when Turnstile
+cooperates, but treat it as best-effort — see
+[If Cloudflare refuses the login window](#if-cloudflare-refuses-the-login-window).
+Either way the session lands in `~/.htv/browser`, and later downloads need no
+browser window and no account prompt.
+
+| Step | Works with | Needs |
+| --- | --- | --- |
+| search / info / storyboards | ✅ | `requests` |
+| streams | ✅ | `browser` extra |
+| download | ✅ | `browser` extra + imported session |
 
 ## Quick start
 
@@ -80,7 +113,8 @@ Turnstile frequently scores an automated browser as a bot and answers
 not try to evade it. Sign in with a browser you already use, then lend the tool
 that session:
 
-1. Sign in at <https://hanime.tv> in your normal browser.
+1. Sign in — or create the account — at <https://hanime.tv> in your normal
+   browser.
 2. DevTools → **Network** → reload → click the `hanime.tv` document request →
    **Headers** → Request Headers → copy the value of `cookie:`.
 3. Save it to `cookie.txt`.

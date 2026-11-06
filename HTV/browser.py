@@ -378,10 +378,16 @@ class BrowserSession:
                 return state["user"]
             if problem:
                 raise LoginRequired(
-                    "hanime.tv rejected the sign-in: %r. Cloudflare flags VPN and "
-                    "proxy exit IPs here - disable the VPN for the login (or add "
-                    "the browser to Proton VPN's split-tunnel exclusions), then "
-                    "retry `login`." % problem
+                    "hanime.tv rejected the sign-in: %r\n"
+                    "Turnstile blocks VPN exit IPs, and it often blocks the "
+                    "automated browser itself even on a clean connection. If "
+                    "retrying without a VPN fails the same way, do this instead:\n"
+                    "  1. sign in (or register) at https://hanime.tv in your "
+                    "normal browser\n"
+                    "  2. DevTools -> Network -> the hanime.tv request -> copy "
+                    "the `cookie:` header\n"
+                    "  3. python -m HTV login --cookies-file cookie.txt"
+                    % problem
                 )
             time.sleep(1.0)
 
