@@ -17,10 +17,12 @@ License: MIT
 from __future__ import annotations
 
 import json
+import os
 import random
 import re
 import time
 from html.parser import HTMLParser
+from pathlib import Path
 from typing import Any, Dict, Iterable, List, Optional, Tuple, Union
 from urllib.parse import quote, urljoin
 
@@ -38,7 +40,7 @@ from .exceptions import (
 
 __all__ = ["HanimeTV"]
 
-__version__ = "2.0.0"
+__version__ = "2.1.0"
 
 BASE_URL = "https://hanime.tv"
 GUEST_API_URL = "https://guest.freeanimehentai.net"
@@ -568,21 +570,111 @@ class HanimeTV:
             storyboard["content_type"] = response.headers.get("content-type")
         return storyboard
 
-    # ------------------------------------------------------------- unsupported
+    # --------------------------------------------------------------- browser
 
-    def login(self, email: Optional[str] = None, password: Optional[str] = None) -> None:
-        """Unavailable since v2 - see :class:`~HTV.exceptions.UnsupportedFeature`."""
-        raise UnsupportedFeature(
-            "scripted login is no longer possible: hanime.tv requires a Cloudflare "
-            "Turnstile challenge and signs every authenticated request with a "
-            "browser-only WebAssembly module."
+    def login(
+        self,
+        email: Optional[str] = None,
+        password: Optional[str] = None,
+        *,
+        headless: bool = False,
+        profile_dir: Optional[str] = None,
+        wait_seconds: float = 300.0,
+    ) -> Dict[str, Any]:
+        """Sign in through a real browser window and keep the session on disk.
+
+        hanime.tv signs every authenticated request inside its own WebAssembly
+        module, so the sign-in has to happen in a browser. The profile is
+        persistent: log in once, and :meth:`download` works from then on.
+
+        Args:
+            email: Optional; prefilled into the form. The security check itself
+                is always left to you (keep the window visible).
+            password: Optional; same.
+            headless: Hide the window. Only useful once the profile exists.
+            profile_dir: Where the browser profile lives
+                (default ``~/.htv/browser``).
+            wait_seconds: How long to wait for the sign-in to complete.
+
+        Returns:
+            The signed-in user object.
+        """
+        from .browser import BrowserSession
+
+        with BrowserSession(profile_dir=profile_dir, headless=headless) as session:
+            if session.is_logged_in():
+                return session.user() or {}
+            return session.login(email, password, wait_seconds=wait_seconds)
+
+    def download(
+        self,
+        url: Union[str, Dict[str, Any]],
+        *,
+        out_dir: Union[str, "os.PathLike[str]"] = ".",
+        quality: Optional[str] = None,
+        headless: bool = False,
+        profile_dir: Optional[str] = None,
+        resume: bool = True,
+        progress: bool = True,
+    ) -> "Path":
+        """Download one video as MP4, using the account stored by :meth:`login`.
+
+        Args:
+            url: Video URL, catalog dict or slug.
+            out_dir: Destination directory (created if missing).
+            quality: Preferred resolution, e.g. ``"1080"`` or ``"720"``. The
+                closest available link is used when it is absent.
+            headless: Run the browser without a window. The stored profile is
+                already signed in, so this normally works.
+            profile_dir: Browser profile to reuse.
+            resume: Continue a partial ``.part`` file.
+            progress: Show a progress line on stderr.
+
+        Returns:
+            Path of the downloaded file.
+
+        Raises:
+            LoginRequired: No account in the browser profile.
+            BrowserUnavailable: Playwright/Chromium is not installed.
+            DownloadError: The transfer failed.
+        """
+        from .browser import BrowserSession
+        from .download import download_links
+
+        info = self.info(url)
+        with BrowserSession(profile_dir=profile_dir, headless=headless) as session:
+            result = session.download_links(info["slug"], info.get("id"))
+
+        return download_links(
+            result["links"],
+            info.get("name") or info["slug"],
+            out_dir,
+            quality=quality,
+            resume=resume,
+            progress=progress,
         )
 
-    def download(self, url: Union[str, Dict[str, Any]]) -> None:
-        """Unavailable since v2 - download links require a signed-in account."""
-        raise UnsupportedFeature(
-            "download() is not available: hanime.tv only serves MP4 links to "
-            "signed-in accounts, behind a signed handshake produced by the site's "
-            "WebAssembly module. Use storyboards() for thumbnails or open %s in a "
-            "browser." % self.slug(url)
-        )
+    def streams(
+        self,
+        url: Union[str, Dict[str, Any]],
+        *,
+        headless: bool = True,
+        profile_dir: Optional[str] = None,
+    ) -> List[Dict[str, Any]]:
+        """Return the playable HLS sources of a video - no account required.
+
+        Each entry has ``src`` (absolute URL), ``type``, ``label``, ``height``,
+        ``width`` and ``kind`` (``"normal"`` is a real stream; ``"promotion"``
+        entries are teasers and usually carry an empty ``src``).
+        """
+        from urllib.parse import urljoin
+
+        from .browser import BrowserSession
+
+        slug = self.slug(url)
+        with BrowserSession(profile_dir=profile_dir, headless=headless) as session:
+            sources = session.sources(slug)
+        for source in sources:
+            source["url"] = urljoin(BASE_URL + "/", source.get("src") or "")
+        return sources
+

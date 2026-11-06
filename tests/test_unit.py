@@ -2,7 +2,7 @@
 
 import pytest
 
-from HTV import HanimeTV, NotFound, UnsupportedFeature
+from HTV import HanimeTV, LoginRequired, NotFound, UnsupportedFeature
 from HTV.hanime import (
     ORDERINGS,
     _PageParser,
@@ -306,14 +306,106 @@ def test_storyboards_missing_raises_not_found(offline, monkeypatch):
         offline.storyboards("example-video")
 
 
-# ---------------------------------------------------------------- unsupported
+# ------------------------------------------------------------------- browser
 
 
-def test_download_and_login_are_explicitly_unsupported(offline):
-    with pytest.raises(UnsupportedFeature):
-        offline.download("example-video")
-    with pytest.raises(UnsupportedFeature):
-        offline.login("a@b.c", "hunter2")
+class _FakeSession:
+    """Stand-in for HTV.browser.BrowserSession (no Chromium in unit tests)."""
+
+    def __init__(self, *, links=None, user=None, error=None, sources=None):
+        self._links = links or []
+        self._user = user
+        self._error = error
+        self._sources = sources or []
+        self.profile_dir = "unused"
+        self.headless = True
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc):
+        return False
+
+    def is_logged_in(self):
+        return bool(self._user)
+
+    def user(self):
+        return self._user
+
+    def login(self, email=None, password=None, wait_seconds=0):
+        if self._error:
+            raise self._error
+        self._user = {"name": "tester"}
+        return self._user
+
+    def download_links(self, slug, video_id=None):
+        if self._error:
+            raise self._error
+        return {"links": self._links, "is_premium_user": False}
+
+    def sources(self, slug):
+        return self._sources
+
+
+def test_login_returns_user_from_browser(offline, monkeypatch):
+    import HTV.browser as browser
+
+    monkeypatch.setattr(browser, "BrowserSession", lambda **kw: _FakeSession(user={"name": "tester"}))
+    assert offline.login()["name"] == "tester"
+
+
+def test_download_propagates_login_required(offline, monkeypatch):
+    import HTV.browser as browser
+
+    monkeypatch.setattr(
+        browser,
+        "BrowserSession",
+        lambda **kw: _FakeSession(error=LoginRequired("sign in first")),
+    )
+    monkeypatch.setattr(offline, "info", lambda url: {"slug": "example-video", "name": "Example Video"})
+    with pytest.raises(LoginRequired):
+        offline.download("example-video", progress=False)
+
+
+def test_download_uses_links_from_browser(offline, monkeypatch, tmp_path):
+    import HTV.browser as browser
+
+    payload = b"x" * 4096
+    link = {"url": "http://example.invalid/video.mp4", "quality": "720"}
+    monkeypatch.setattr(browser, "BrowserSession", lambda **kw: _FakeSession(links=[link]))
+    monkeypatch.setattr(offline, "info", lambda url: {"slug": "example-video", "name": "Example Video"})
+
+    written = {}
+
+    def fake_download(links, name, out_dir, **kwargs):
+        written["links"] = links
+        written["name"] = name
+        written["quality"] = kwargs.get("quality")
+        path = tmp_path / "out.mp4"
+        path.write_bytes(payload)
+        return path
+
+    import HTV.download as download
+
+    monkeypatch.setattr(download, "download_links", fake_download)
+    result = offline.download("example-video", out_dir=tmp_path, quality="720")
+
+    assert result.read_bytes() == payload
+    assert written["links"] == [link]
+    assert written["name"] == "Example Video"
+    assert written["quality"] == "720"
+
+
+def test_streams_builds_absolute_urls(offline, monkeypatch):
+    import HTV.browser as browser
+
+    monkeypatch.setattr(
+        browser,
+        "BrowserSession",
+        lambda **kw: _FakeSession(sources=[{"src": "/hls/1/token/master.m3u8", "label": "720p"}]),
+    )
+    streams = offline.streams("example-video")
+    assert streams[0]["url"] == "https://hanime.tv/hls/1/token/master.m3u8"
 
 
 def test_credentials_are_rejected_at_construction():

@@ -1,7 +1,10 @@
-"""HanimeTV - a Python client for the public hanime.tv API."""
+"""HanimeTV - a Python client for hanime.tv (public API + browser-backed downloads)."""
 
 from .exceptions import (
+    BrowserUnavailable,
+    DownloadError,
     HanimeTVError,
+    LoginRequired,
     NetworkError,
     NotFound,
     ParseError,
@@ -17,4 +20,7 @@ __all__ = [
     "NotFound",
     "ParseError",
     "UnsupportedFeature",
+    "BrowserUnavailable",
+    "LoginRequired",
+    "DownloadError",
 ]

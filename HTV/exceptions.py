@@ -6,6 +6,9 @@ __all__ = [
     "NotFound",
     "ParseError",
     "UnsupportedFeature",
+    "BrowserUnavailable",
+    "LoginRequired",
+    "DownloadError",
 ]
 
 
@@ -26,4 +29,16 @@ class ParseError(HanimeTVError):
 
 
 class UnsupportedFeature(HanimeTVError):
-    """The feature used to exist but is no longer reachable without a browser session."""
+    """The feature cannot be provided by this library (see the message)."""
+
+
+class BrowserUnavailable(UnsupportedFeature):
+    """Playwright (or its Chromium build) is missing, so signed requests cannot run."""
+
+
+class LoginRequired(UnsupportedFeature):
+    """The operation needs a signed-in hanime.tv account."""
+
+
+class DownloadError(HanimeTVError):
+    """A file could not be downloaded completely."""

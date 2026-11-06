@@ -29,3 +29,11 @@ print("  grid   : %sx%s (%s tiles)" % (
 print("\n== newest ==")
 for video in hentai.search("", order="newest", per_page=5):
     print("  %-40s %s" % (video["name"], video.get("created_at")))
+
+# DOWNLOADS (needs a one-time browser sign-in)
+#   python -m HTV login
+#   python -m HTV download example-video -q 720 -o videos
+# or from Python:
+#   hentai.login()                                     # opens a browser once
+#   hentai.download("example-video", quality="720")
+print("\nFor MP4 downloads: `python -m HTV login`, then `python -m HTV download <slug>`")

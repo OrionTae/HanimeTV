@@ -1,69 +1,105 @@
 # HanimeTV
 
-Python client for the public [hanime.tv](https://hanime.tv) API.
+Python client and CLI for [hanime.tv](https://hanime.tv): catalog search, video
+metadata, storyboards, playable stream URLs, and MP4 downloads.
 
-> **v2 — rewritten November 2026.** The 2019 client is dead: `search.hanime.tv`,
-> `members.hanime.tv` and `mapi.htvanime.com` no longer exist. v2 talks to the
-> API the site actually uses today and needs no account. See
-> [what changed](#what-changed-in-v2).
+> **v2.1** — the 2019 client is dead (`search.hanime.tv`, `members.hanime.tv` and
+> `mapi.htvanime.com` no longer exist). Metadata works anonymously; login and
+> downloads go through a real browser, because hanime.tv signs those requests
+> inside its own WebAssembly module.
 
 ## Installation
 
 ```sh
-pip install -r requirements.txt   # requests only
-# or
-pip install .
+pip install -r requirements.txt        # metadata only: requests
+pip install ".[browser]"               # + login and downloads (Playwright)
+playwright install chromium            # one-time browser download
 ```
 
 Python 3.8+.
 
-## Usage
+## Quick start
 
 ```python
 from HTV import HanimeTV
 
 hentai = HanimeTV()
 
-# SEARCH — matches titles, alternate titles and slugs
+# SEARCH - matches titles, alternate titles and slugs
 for video in hentai.search("Example Show", per_page=5):
     print(video["name"], "->", video["url"])
 
-# BROWSE — an empty query lists the catalog
-newest = hentai.search("", order="newest", per_page=10)
-tagged = hentai.search("", tags=["big boobs"], brand="Suzuki Mirano")
+# GET INFO - URL, catalog dict or slug
+info = hentai.info("example-video")
+print(info["name"], info["brand"], info["views"])
 
-# GET INFO — accepts a URL, a catalog dict, or a bare slug
-info = hentai.info("https://hanime.tv/videos/hentai/example-show-1")
-print(info["name"], info["brand"], info["views"], info["tags"])
-
-# GET STORYBOARDS — sprite sheet metadata, optionally the JPEG itself
+# STORYBOARDS - sprite sheet metadata, optionally the JPEG itself
 board = hentai.storyboards(info, image=True)
 print(board["url"], board["columns"], board["rows"], len(board["image"]))
 ```
 
-Because a search result carries its own `url`, results feed straight back in:
+## Command line
 
-```python
-for video in hentai.search("example video"):
-    hentai.storyboards(video)
+```sh
+python -m HTV login                       # opens a browser; sign in once
+python -m HTV search "demo" -n 10
+python -m HTV info example-video
+python -m HTV streams example-video    # HLS URLs, no account needed
+python -m HTV download example-video -q 720 -o ~/Videos
+python -m HTV storyboards example-video --image board.jpg
+python -m HTV whoami
+python -m HTV logout
 ```
 
-## API
+`pip install .` also provides the same commands as `htv`. `--json` is available
+on `search`, `info` and `streams` for scripting.
+
+## Login and downloads
+
+hanime.tv protects `auth.hanime.tv` with two things a plain HTTP client cannot
+produce: a Cloudflare Turnstile challenge on login, and an `x-signature` /
+`x-time` header pair that only the site's WebAssembly module can mint. Forging
+that signature is out of scope for this project.
+
+So `login()` drives a real Chromium page instead: the site signs its own
+requests, you complete the security check, and the resulting session is stored
+in a persistent profile (`~/.htv/browser` by default). After that:
+
+```python
+hentai = HanimeTV()
+hentai.login()                                    # once, browser window
+path = hentai.download("example-video", quality="720", out_dir="videos")
+print(path)                                       # videos/Example Video [720p].mp4
+```
+
+Downloads stream to `<name>.part` and resume on rerun, so an interrupted
+transfer is not lost. The MP4 links themselves are ordinary file-host URLs.
+
+Notes:
+
+- `login(headless=True)` works only once the profile exists.
+- The browser profile is a credential: treat `~/.htv/browser` like a password.
+- `logout()` (or `python -m HTV logout`) deletes it.
+
+## Library API
 
 | Method | Returns |
 | --- | --- |
-| `catalog(refresh=False)` | every public video (3463 at the time of writing), cached |
+| `catalog(refresh=False)` | every public video, cached for an hour |
 | `refresh()` | force a catalog re-download |
-| `search(query="", page=0, per_page=25, order="relevance", tags=None, brand=None, all=False)` | list of catalog dicts, best match first |
+| `search(query="", *, page=0, per_page=25, order="relevance", tags=None, brand=None, all=False)` | list of catalog dicts, best match first |
 | `info(url)` | one video, merged with its watch page |
-| `storyboards(url, image=False)` | `{"url", "columns", "rows", "tile_count"}`, plus `{"image", "content_type"}` when `image=True` |
-| `tags()` / `brands()` | sorted `list[str]` from the catalog |
-| `HanimeTV.slug(value)` | normalise a URL / dict / slug to a slug |
+| `storyboards(url, image=False)` | `{"url", "columns", "rows", "tile_count"}` |
+| `streams(url)` | playable HLS sources (no account) |
+| `login(email=None, password=None, *, headless=False)` | user object; stores the browser profile |
+| `download(url, *, out_dir=".", quality=None, headless=False)` | `Path` of the downloaded MP4 |
+| `tags()`, `brands()` | sorted `list[str]` |
+| `HanimeTV.slug(value)` | normalise URL / dict / slug |
 
 `order` accepts `relevance`, `newest`, `oldest`, `released`, `views`, `likes`,
-`downloads`, `name` and `random`.
+`downloads`, `name`, `random`.
 
-Every catalog item and every `info()` result is a plain `dict`:
+Catalog items and `info()` results are plain dicts:
 
 ```
 id, name, slug, url, brand, brand_id, description, tags, views, likes,
@@ -71,59 +107,46 @@ dislikes, downloads, search_titles, created_at, released_at,
 poster_url, cover_url
 ```
 
-`info()` adds `storyboard` (`{url, columns, rows, tile_count}`) and
-`next_video_url` when the site publishes them.
+`info()` adds `storyboard` and `next_video_url` when published.
 
-Search is performed locally: hanime.tv exposes one public catalog endpoint and
-filters it in the browser, so there is no server-side query API to call.
-The catalog is downloaded once (~4.5 MB) and then cached for an hour
-(`cache_ttl`), which is why the first `search()` takes a few seconds.
+Search is local: hanime.tv exposes one public catalog endpoint and filters it in
+the browser, so there is no query API to call. The catalog is downloaded once
+(~4.5 MB) and cached for an hour (`cache_ttl`).
 
 ## Errors
 
-All exceptions inherit from `HTV.HanimeTVError`.
+All inherit from `HTV.HanimeTVError`.
 
 | Exception | Meaning |
 | --- | --- |
 | `NetworkError` | DNS/TLS/timeout/connection failure |
-| `NotFound` | the slug does not exist (HTTP 404) |
-| `ParseError` | the response was not the shape we expect |
-| `UnsupportedFeature` | login / downloads, which no longer work from a script |
+| `NotFound` | the slug does not exist |
+| `ParseError` | response was not the expected shape |
+| `BrowserUnavailable` | Playwright or Chromium is missing |
+| `LoginRequired` | the operation needs a signed-in profile |
+| `DownloadError` | a transfer failed or was left incomplete |
+| `UnsupportedFeature` | base class for the three above |
 
-## Not supported (and why)
+## Limitations
 
-- **`login()`** — sign-in requires a Cloudflare Turnstile challenge.
-- **`download()`** — MP4 links are only issued to signed-in accounts, behind a
-  handshake signed by the site's WebAssembly module.
-
-Both raise `UnsupportedFeature` with an explanation instead of failing
-mysteriously or silently returning junk. Open the video page in a browser for
-those two. Streaming sources are gated the same way.
-
-## What changed in v2
-
-| | v1 (2019) | v2 |
-| --- | --- | --- |
-| Search | `POST search.hanime.tv` (host deleted) | local filter over the public catalog |
-| Info | `members.hanime.tv/api/v5` (host deleted) | catalog + watch-page props |
-| Storyboards | `members.hanime.tv/api/v1` (host deleted) | watch-page props |
-| Login / download | `mapi.htvanime.com/api/v4` (host deleted) | `UnsupportedFeature` |
-| Video URL | `/hentai-videos/<slug>` (404) | `/videos/hentai/<slug>` |
-| Search / info return | raw server response | flat `dict` / `list[dict]` |
+- **No HLS ripping.** `streams()` returns the manifest URLs the player uses;
+  assembling segments is left to tools like `yt-dlp` if you want it.
+- **Downloads need an account**, because that is the site's own rule.
+- One `BrowserSession` per thread at a time (Playwright's sync API).
 
 ## Tests
 
 ```sh
-python -m pytest            # 57 tests: unit + live
-python -m pytest tests/test_unit.py   # offline only
+python -m pytest                      # 91 tests
+python -m pytest tests/test_unit.py   # offline
+HTV_BROWSER_TESTS=1 python -m pytest tests/test_browser.py   # launches Chromium
 ```
 
-`tests/test_unit.py` is fully offline (synthetic catalog, no sockets).
-`tests/test_live.py` hits hanime.tv and therefore needs network access; it
-verifies the catalog, search, pagination, `info()`, storyboard metadata and the
-storyboard JPEG bytes.
+Offline suites cover slug parsing, ranking, filters, caching, the downloader
+(local HTTP server, resume, errors) and the CLI. Live suites cover the catalog,
+search, `info`, storyboards, and — when enabled — the browser handshake.
 
 ## Legal
 
-MIT licensed, as before. This is an unofficial client; respect the site's terms
-and the law where you live. The service hosts adult content (18+).
+MIT licensed. Unofficial client; respect the site's terms and the law where you
+live. The service hosts adult content (18+).
